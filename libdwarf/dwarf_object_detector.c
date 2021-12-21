@@ -171,7 +171,9 @@ magic_copy(unsigned char *d, unsigned len)
 #endif /* end LITTLE- BIG-ENDIAN */
 
 
+#ifndef EI_NIDENT
 #define EI_NIDENT 16
+#endif
 /* An incomplete elf header, good for 32 and 64bit elf */
 struct elf_header {
     unsigned char  e_ident[EI_NIDENT];
