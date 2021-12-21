@@ -71,6 +71,9 @@
 
 */
 
+#ifndef DWARF_OPAQUE_H
+#define DWARF_OPAQUE_H
+
 struct Dwarf_Rnglists_Context_s;
 typedef struct Dwarf_Rnglists_Context_s *Dwarf_Rnglists_Context;
 struct Dwarf_Loclists_Context_s;
@@ -1100,3 +1103,5 @@ unsigned int  _dwarf_crc32(unsigned int init,
 
 
 void _dwarf_dumpsig(const char *msg, Dwarf_Sig8 *sig, int lineno);
+
+#endif /* DWARF_OPAQUE_H */
