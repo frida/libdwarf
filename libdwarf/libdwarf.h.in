@@ -63,7 +63,7 @@ extern "C" {
 */
 
 typedef struct Elf Elf;
-typedef struct Elf* dwarf_elf_handle;
+typedef Elf* dwarf_elf_handle;
 
 /* To enable printing with printf regardless of the
    actual underlying data type, we define the DW_PR_xxx macros.
