@@ -25,12 +25,10 @@ darwin_versions = [lt_cur + 1, '@0@.@1@'.format(lt_cur + 1, lt_rev)]
 
 cc = meson.get_compiler('c')
 
-extra_link_args = []
-
 libelf_dep = dependency('libelf', required: false)
 if not libelf_dep.found()
-  if not meson.is_cross_build() and cc.has_header('libelf.h')
-    extra_link_args += '-lelf'
+  if cc.has_header('libelf.h')
+    libelf_dep = cc.find_library('elf')
   else
     libelf_dep = dependency('libelf', required: true)
   endif

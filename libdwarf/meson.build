@@ -98,7 +98,6 @@ libdwarf = library('dwarf', sources,
   version: library_version,
   darwin_versions: darwin_versions,
   include_directories: libdwarf_internal_incdirs,
-  link_args: extra_link_args,
   dependencies: [libelf_dep, zlib_dep],
   install: true,
 )
