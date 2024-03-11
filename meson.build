@@ -25,6 +25,10 @@ darwin_versions = [lt_cur + 1, '@0@.@1@'.format(lt_cur + 1, lt_rev)]
 
 cc = meson.get_compiler('c')
 
+if meson.is_subproject() and cc.get_argument_syntax() != 'msvc'
+  add_project_arguments('-w', language: 'c')
+endif
+
 libelf_dep = dependency('libelf', required: false)
 if not libelf_dep.found()
   if cc.has_header('libelf.h')
