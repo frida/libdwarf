@@ -1,186 +1,289 @@
-project('libdwarf', 'c',
-  version: '20201201',
-  default_options: [
-    'c_std=gnu99',
+project('libdwarf', ['c','cpp'],
+  version: '0.11.2',
+  default_options : [
+    'buildtype=debugoptimized',
+    'warning_level=3',
   ],
+  meson_version : '>=0.54'
 )
 
-v_maj = 1
-v_min = 0
-v_mic = 0
+# version 0.56 is the first version with project_source_root and
+# project_build_root.   We use meson.current_source_dir() and
+# meson.current_build_dir()  (and read these before
+# meson knows of other directories) to avoid meson.build_root()
+# meson.source_root() and avoid requring 0.56. Ubuntu 20.04,
+# for example, uses meson 0.53.
 
-lt_cur = v_maj + v_min
-lt_rev = v_mic
-lt_age = v_min
+# meson file system module
+fs = import('fs')
 
+v_arr = meson.project_version().split('.')
+v_maj = v_arr[0]
+v_min = v_arr[1]
+v_mic = v_arr[2]
+
+lib_type = get_option('default_library')
+
+# install paths
+dir_prefix = get_option('prefix')
+dir_include = join_paths(dir_prefix, get_option('includedir'))
+dir_pkginclude = join_paths(dir_include, meson.project_name())
+dir_bin = join_paths(dir_prefix, get_option('bindir'))
+dir_lib = join_paths(dir_prefix, get_option('libdir'))
+dir_data = join_paths(dir_prefix, get_option('datadir'))
+dir_pkgdata = join_paths(dir_data, meson.project_name())
+dir_locale = join_paths(dir_prefix, get_option('localedir'))
+
+# host
+windows = import('windows')
 host_os = host_machine.system()
-if host_os in ['hpux', 'netbsd', 'openbsd', 'sunos']
-  library_version = '@0@.@1@'.format(lt_cur, lt_rev)
-elif host_os == 'qnx'
-  library_version = lt_cur.to_string()
-else
-  library_version = '@0@.@1@.@2@'.format(lt_cur - lt_age, lt_age, lt_rev)
-endif
-darwin_versions = [lt_cur + 1, '@0@.@1@'.format(lt_cur + 1, lt_rev)]
+
+windows = ['windows', 'cygwin']
+#bsd for meson 0.46 and 0.47
+bsd = ['bsd', 'freebsd', 'dragonfly', 'netbsd', 'openbsd']
+linux = ['linux']
+osx = ['darwin']
+sun = ['sunos']
+
+sys_linux = linux.contains(host_machine.system())
+sys_bsd = bsd.contains(host_machine.system())
+sys_windows = windows.contains(host_machine.system())
+sys_osx = osx.contains(host_machine.system())
+sys_sun = sun.contains(host_machine.system())
+
+# compiler
 
 cc = meson.get_compiler('c')
+cpp = meson.get_compiler('cpp')
 
-if meson.is_subproject() and cc.get_argument_syntax() != 'msvc'
-  add_project_arguments('-w', language: 'c')
-endif
+dev_cflags = []
+dev_cppflags = []
+dev_cppflags_onlylibdwarf = []
+dev_ldflags = []
 
-libelf_dep = dependency('libelf', required: false)
-if not libelf_dep.found()
-  if cc.has_header('libelf.h')
-    libelf_dep = cc.find_library('elf')
-  else
-    libelf_dep = dependency('libelf', required: true)
-  endif
-endif
-zlib_dep = dependency('zlib', required: false)
-
-cdata = configuration_data()
-
-project_name = meson.project_name()
-project_version = meson.project_version()
-cdata.set_quoted('PACKAGE', project_name)
-cdata.set_quoted('PACKAGE_NAME', project_name)
-cdata.set_quoted('PACKAGE_TARNAME', project_name)
-cdata.set_quoted('PACKAGE_VERSION', project_version)
-cdata.set_quoted('VERSION', project_version)
-cdata.set_quoted('PACKAGE_STRING', project_name + ' ' + project_version)
-cdata.set_quoted('PACKAGE_URL', '')
-cdata.set_quoted('PACKAGE_BUGREPORT', 'libdwarf-list -at- linuxmail -dot- org')
-
-# No need to detect this for the platforms we currently support.
-cdata.set('HAVE_ALLOCA', 1)
-
-if cc.compiles('''static unsigned int foo(unsigned int x, __attribute__ ((unused)) int y) {
-                      unsigned int x2 = x + 1;
-                      return x2;
-                  }
-                  int goo() {
-                      unsigned int y = 0;
-                      y = foo(12, y);
-                  }''',
-               args: ['-Werror'],
-               name: 'compiler supports __attribute__ ((unused))')
-  cdata.set('HAVE_UNUSED_ATTRIBUTE', 1)
-endif
-
-cdata.set('STDC_HEADERS', 1)
-
-system_headers = [
-  'alloca.h',
-  'dlfcn.h',
-  'inttypes.h',
-  'malloc.h',
-  'memory.h',
-  'regex.h',
-  'stddef.h',
-  'stdint.h',
-  'stdlib.h',
-  'string.h',
-  'strings.h',
-  'sys/stat.h',
-  'sys/types.h',
-  'unistd.h',
-  'windows.h',
+dev_cflags_try = [
+  '-Wpointer-arith',
+  '-Wmissing-declarations',
+  '-Wstrict-prototypes',
+  '-Wcomment',
+  '-Wformat',
+  '-Wuninitialized',
+  '-Wshadow',
+  '-Wno-long-long',
+  '-Wfloat-compare',
+  '-Wsign-compare',
+  '-Wno-missing-field-initializers',
+  '-fno-omit-frame-pointer'
 ]
-foreach h : system_headers
-  if cc.has_header(h)
-    cdata.set('HAVE_' + h.underscorify().to_upper(), 1)
+sanitize_flags_try = [
+  '-fsanitize=address',
+  '-fsanitize=leak',
+  '-fsanitize=undefined'
+]
+
+
+if sys_windows
+  if cc.get_id() != 'msvc'
+    dev_cflags_try += '-Wno-pedantic-ms-format'
+  endif
+else
+  dev_cflags_try += '-fvisibility=hidden'
+endif
+
+foreach cf: dev_cflags_try
+  if cc.has_argument(cf)
+    dev_cflags += cf
+  endif
+  if get_option('dwarfgen') == true
+    if cpp.has_argument(cf)
+      dev_cppflags += cf
+    endif
   endif
 endforeach
 
-if cdata.has('HAVE_STDINT_H')
-  if cc.compiles('''#include <stdint.h>
-                    int foo(void) {
-                        uintptr_t i = 42;
-                        return (int)i;
-                    }''',
-                 name: 'uintptr_t defined in stdint.h')
-    cdata.set('HAVE_UINTPTR_T', 1)
-  endif
-  if cc.compiles('''#include <stdint.h>
-                    int foo(void) {
-                        intptr_t i = 42;
-                        return (int)i;
-                    }''',
-                 name: 'intptr_t defined in stdint.h')
-    cdata.set('HAVE_INTPTR_T', 1)
+dev_speciallibdwarfmalloc = get_option('libdwarfspecialmalloc') 
+if dev_speciallibdwarfmalloc
+  dev_cppflags_onlylibdwarf += '-DLIBDWARF_MALLOC'
+endif
+
+#if fs.isdir('/usr/local/include')
+#  dev_cflags += '-I/usr/local/include'
+#endif
+#if fs.isdir('/opt/local/include')
+#  dev_cflags += '-I/opt/local/include'
+#endif
+
+dwarf_link_args = []
+dev_sanitize = get_option('sanitize')
+if dev_sanitize
+  foreach cf: sanitize_flags_try
+    if cc.has_argument(cf)
+      dev_cflags += cf
+      dwarf_link_args += cf
+    endif
+  endforeach
+endif
+
+dev_decompression = get_option('decompression')
+
+libdwarf_args = [ '-D__USE_MINGW_ANSI_STDIO=0' ]
+if cc.get_id() == 'msvc'
+  libdwarf_args += [ '-D_CRT_NONSTDC_NO_WARNINGS']
+endif
+
+config_dir = [include_directories('.')]
+
+# configuration
+
+# sys/stat.h is for dwarfgen.
+header_checks = [
+  'fcntl.h',
+  'inttypes.h',
+  'malloc.h',
+  'stdint.h',
+  'sys/stat.h',
+]
+
+if sys_windows == false
+  header_checks += 'unistd.h'
+endif
+
+config_h = configuration_data()
+config_h.set_quoted('PACKAGE_NAME', meson.project_name())
+config_h.set_quoted('PACKAGE_VERSION', meson.project_version())
+config_h.set_quoted('PROJECT_VERSION', meson.project_version())
+config_h.set_quoted('PACKAGE_BIN_DIR', dir_bin)
+config_h.set_quoted('PACKAGE_LIB_DIR', dir_lib)
+config_h.set_quoted('PACKAGE_DATA_DIR', dir_data)
+config_h.set_quoted('LOCALEDIR', dir_locale)
+
+if host_machine.endian() == 'big'
+  config_h.set10('WORDS_BIGENDIAN', true)
+endif
+
+if cc.has_function_attribute('unused') == true
+  config_h.set10('HAVE_UNUSED_ATTRIBUTE', true)
+endif
+
+if cc.has_function('setlocale') == true
+  if cc.has_function('nl_langinfo') == true
+    config_h.set10('HAVE_UTF8', true)
   endif
 endif
 
-if cc.compiles('''#if @0@
-                  # include <sys/types.h>
-                  #endif
-                  #if @1@
-                  # include <regex.h>
-                  #endif
+foreach header : header_checks
+  if cc.has_header(header)
+    config_h.set10('HAVE_'+header.underscorify().to_upper(), true)
+  endif
+endforeach
 
-                  void foo(void) {
-                      int i;
-                      regex_t r;
-                      int cflags = REG_EXTENDED;
-                      const char *s = "abc";
-                      i = regcomp(&r,s,cflags);
-                      regfree(&r);
-                  }
-                  '''.format(cdata.has('HAVE_SYS_TYPES_H').to_int(),
-                             cdata.has('HAVE_REGEX_H').to_int()),
-               name: 'regex library is available')
-  cdata.set('HAVE_REGEX', 1)
-endif
+foreach t : [ 'uint64_t', 'uintptr_t', 'intptr_t' ]
+  if not cc.has_type(t, prefix: '#include <stdint.h>')
+    error('Sanity check failed: type @0@ not provided via stdint.h'.format(t))
+  endif
+endforeach
 
-cdata.set('DWARF_WITH_LIBELF', 1)
-if libelf_dep.type_name() == 'internal'
-  cdata.set('HAVE_ELF_H', 1)
-  cdata.set('HAVE_LIBELF_H', 1)
-  cdata.set('HAVE_ELF64_GETEHDR', 1)
-  cdata.set('HAVE_ELF64_GETSHDR', 1)
-  cdata.set('HAVE_ELF64_RELA', 1)
-  cdata.set('HAVE_ELF64_SYM', 1)
-  cdata.set('HAVE_ELF64_R_INFO', 1)
-else
-  if cc.has_header('elf.h', dependencies: [libelf_dep])
-    cdata.set('HAVE_ELF_H', 1)
-  endif
-  if cc.has_header('libelf.h', dependencies: [libelf_dep])
-    cdata.set('HAVE_LIBELF_H', 1)
-  endif
-  if cc.has_function('elf64_getehdr', dependencies: [libelf_dep])
-    cdata.set('HAVE_ELF64_GETEHDR', 1)
-  endif
-  if cc.has_function('elf64_getshdr', dependencies: [libelf_dep])
-    cdata.set('HAVE_ELF64_GETSHDR', 1)
-  endif
-  if cc.has_header_symbol('elf.h', 'Elf64_Rela', dependencies: [libelf_dep])
-    cdata.set('HAVE_ELF64_RELA', 1)
-  endif
-  if cc.has_header_symbol('elf.h', 'Elf64_Sym', dependencies: [libelf_dep])
-    cdata.set('HAVE_ELF64_SYM', 1)
-  endif
-  if cc.has_member('Elf64_Rel', 'r_info', dependencies: [libelf_dep], prefix: '#include <elf.h>')
-    cdata.set('HAVE_ELF64_R_INFO', 1)
-  endif
-endif
+# Do this early so we have the base source and build directory names
+# for this and test/meson.build
+project_source_base_root = meson.current_source_dir()
+project_build_base_root = meson.current_build_dir()
 
-if zlib_dep.found()
-  cdata.set('HAVE_ZLIB', 1)
-  cdata.set('HAVE_ZLIB_H', 1)
+subdir('src/lib/libdwarf')
+subdir('src/bin/dwarfdump')
+have_libdwarfp = false
+if get_option('dwarfgen') == true
+  subdir('src/lib/libdwarfp')
+  subdir('src/bin/dwarfgen')
+  have_libdwarfp = true
 endif
+subdir('src/bin/attr_form')
+subdir('src/bin/buildopstab')
+subdir('src/bin/builduritable')
+subdir('src/bin/gennames')
+subdir('src/bin/tag_attr')
+subdir('src/bin/tag_tree')
+if get_option('dwarfexample') == true
+  subdir('src/bin/dwarfexample')
+endif
+subdir('doc')
 
 configure_file(
-  input: 'config.h.in.meson',
-  output: 'config.h',
-  configuration: cdata,
+  input: 'src/bin/dwarfdump/dwarfdump.conf',
+  output: 'dwarfdump.conf',
+  copy: true
 )
 
-libdwarf_internal_incdirs = include_directories(
-  '.',
+subdir('test')
+
+# Use config_h after all subdirs have set values
+
+#configure_file(output : 'config.h', configuration : config_h)
+
+# pkg-config files
+
+pkgconf = configuration_data()
+
+pkgconf.set('prefix', get_option('prefix'))
+pkgconf.set('exec_prefix', '${prefix}')
+pkgconf.set('libdir', '${prefix}/@0@'.format(get_option('libdir')))
+pkgconf.set('includedir', '${prefix}/@0@'.format(get_option('includedir')))
+pkgconf.set('pkgincludedir', '${prefix}/@0@'.format(get_option('includedir')) + '/libdwarf')
+pkgconf.set('VMAJ', v_maj)
+pkgconf.set('PACKAGE_VERSION', meson.project_version())
+pkgconf.set('PROJECT_VERSION', meson.project_version())
+if dev_decompression
+  pkgconf.set('requirements_libdwarf_pc', 'zlib')
+  pkgconf.set('requirements_libdwarf_pc', 'libzstd')
+endif
+
+pkgconf.set('requirements_libdwarf_libs', '')
+
+pkg_install_dir = '@0@/pkgconfig'.format(get_option('libdir'))
+
+configure_file(
+  input : join_paths(project_source_base_root, 'libdwarf.pc.in'),
+  output : 'libdwarf.pc',
+  configuration : pkgconf,
+  install_dir : pkg_install_dir
 )
 
-fix_libdwarf_elf = files('scripts' / 'fixlibdwarfelf.py')
+# output
+# Use config_h after all subdirs have set values
 
-subdir('libdwarf')
+configure_file(output : 'config.h', configuration : config_h)
+
+libdwarf_output = ('always')
+if dev_decompression
+  libdwarf_output = 'always (zlib: ' + (zlib_deps.found() ? 'yes' : 'no') + ')'
+  libdwarf_output += ' always (libzstd: ' + (libzstd_deps.found() ? 'yes' : 'no') + ')'
+endif
+
+libdwarfp_output = (have_libdwarfp ? 'yes' : 'no')
+
+summary({'OS': host_os,
+         'BuildOS-BigEndian': host_machine.endian() == 'big' ? 'yes' : 'no',
+         'libdwarf': libdwarf_output,
+         'dwarfdump': 'always',
+         'libdwarfp': libdwarfp_output,
+         'dwarfgen': have_libdwarfp ? 'yes' : 'no',
+         'dwarfexample': get_option('dwarfexample') ? 'yes' : 'no',
+         'documentation': have_doc,
+        }, section: 'Configuration Options Summary:')
+
+summary({'zlib': (zlib_deps.found() ? 'yes' : 'no'),
+         'libzstd': (libzstd_deps.found() ? 'yes' : 'no'),
+        }, section: 'Referenced Libraries:')
+
+summary({'prefix': dir_prefix,
+         'bindir': dir_bin,
+         'libdir': dir_lib,
+         'incdir': dir_include,
+         'pkgincdir': dir_pkginclude,
+         'datadir': dir_data,
+         'pkgdatadir': dir_pkgdata,
+        }, section: 'Directories:')
+
+summary({'compilation': 'ninja',
+         'installation': 'ninja install',
+         'Cflags': dev_cflags,
+        }, section: 'Compilation')
