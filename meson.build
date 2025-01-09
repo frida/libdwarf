@@ -238,7 +238,7 @@ endif
 
 pkgconf.set('requirements_libdwarf_libs', '')
 
-pkg_install_dir = '@0@/pkgconfig'.format(get_option('libdir'))
+pkg_install_dir = '@0@/pkgconfig'.format(sys_bsd ? 'libdata' : get_option('libdir'))
 
 configure_file(
   input : join_paths(project_source_base_root, 'libdwarf.pc.in'),
