@@ -149,5 +149,5 @@ libdwarf = declare_dependency(
 meson.override_dependency('libdwarf', libdwarf)
 
 install_headers(libdwarf_header_src,
-  install_dir : dir_pkginclude + '-' + v_maj
+  install_dir : dir_pkginclude
 )
