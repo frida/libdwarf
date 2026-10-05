@@ -3,15 +3,16 @@ name: macautotool
 on: 
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
  macos_autotools:
     runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: tools
-      run:  brew install automake libtool
+      run: brew install automake libtool
     - name: aclocal
       run: aclocal
     - name: autoreconf

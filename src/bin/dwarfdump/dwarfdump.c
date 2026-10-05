@@ -1,6 +1,6 @@
 /*
 Copyright (C) 2000,2002,2004,2005 Silicon Graphics, Inc.  All Rights Reserved.
-Portions Copyright (C) 2007-2021 David Anderson. All Rights Reserved.
+Portions Copyright (C) 2007-2026 David Anderson. All Rights Reserved.
 Portions Copyright 2007-2010 Sun Microsystems, Inc. All rights reserved.
 Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 
@@ -62,6 +62,7 @@ Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 #include "locale.h"
 #include "langinfo.h"
 #endif /* HAVE_UTF8 */
+#include <string.h>
 
 #include "dwarf.h"
 #include "libdwarf.h"
@@ -84,13 +85,14 @@ Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 #include "dd_attr_form.h"
 #include "print_debug_gnu.h"
 #include "dd_naming.h" /* for get_FORM_name() */
+#include "dd_elf_naming.h" /* EM_* names etc */
 #include "dd_command_options.h"
 #include "dd_compiler_info.h"
 #include "dd_safe_strcpy.h"
 #include "dd_minimal.h"
 #include "dd_mac_cputype.h"
-#include "dd_elf_cputype.h"
 #include "dd_pe_cputype.h"
+#include "dd_all_srcfiles.h"
 
 #ifndef O_RDONLY
 /*  This is for a Windows environment */
@@ -105,6 +107,19 @@ Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 # define O_BINARY 0  /* So it does nothing in Linux/Unix */
 # endif
 #endif /* O_BINARY */
+/*  Basic ELF flags */
+#ifndef ET_DYN
+#define ET_DYN 3
+#endif
+#ifndef ET_EXEC
+#define ET_EXEC 2
+#endif
+#ifndef ET_REL
+#define ET_REL 1
+#endif
+#ifndef SHF_ALLOC
+#define SHF_ALLOC 2
+#endif
 
 #define BYTES_PER_INSTRUCTION 4
 
@@ -530,20 +545,21 @@ main(int argc, char *argv[])
 
                 esb_constructor(&m);
                 errmsg = dwarf_errmsg_by_number(errcode);
-                homeify((char *)sanitized(tied_file_name),&m);
+                homeify((char *)tied_file_name,&m);
                 printf("%s ERROR:  can't open tied file"
                     ".. %s: %s\n",
                     glflags.program_name,
-                    esb_get_string(&m),
+                    sanitized(esb_get_string(&m)),
                     errmsg);
                 esb_destructor(&m);
             } else {
                 struct esb_s m;
                 esb_constructor(&m);
-                homeify((char *)sanitized(tied_file_name),&m);
+                homeify((char *)tied_file_name,&m);
                 printf(
                     "%s ERROR: tied file not an object file '%s'.\n",
-                    glflags.program_name, esb_get_string(&m));
+                    glflags.program_name,
+                    sanitized(esb_get_string(&m)));
                 esb_destructor(&m);
             }
             glflags.gf_count_major_errors++;
@@ -564,8 +580,8 @@ main(int argc, char *argv[])
                 "main file \'%s\' not "
                 "the same kind of object!\n",
                 glflags.program_name,
-                esb_get_string(&m),
-                esb_get_string(&mgf));
+                sanitized(esb_get_string(&m)),
+                sanitized(esb_get_string(&mgf)));
             esb_destructor(&m);
             esb_destructor(&mgf);
             free(temp_path_buf);
@@ -797,6 +813,9 @@ set_global_section_sizes(Dwarf_Debug dbg)
     such as .init .fini __libc_freeres_fn
     .rodata __libc_subfreeres __libc_atexit too. */
 #define LIKELYNAMESMAX 3
+
+/*  This is useless if the compiler uses unusual section
+    names like "text" */
 static const char *likely_ns[LIKELYNAMESMAX] = {
 /*  .text is first as it is often the only thing.See below. */
 ".init",
@@ -850,35 +869,78 @@ likelycmp(const void *l_in, const void *r_in)
     return 0;
 }
 
-/*  This is a bit slow, but happens only once for a dbg.
-    It is not as much help as I expected in avoiding
-    line table content CHECK warnings because, so far,
-    those come from .init csu code and the DWARF has
-    no subprogram information nor any high/low pc
-    information at all.  */
 static int
-calculate_likely_limits_of_code(Dwarf_Debug dbg,
-    Dwarf_Unsigned *lower,
-    Dwarf_Unsigned *size)
+limit_of_code_when_elf(Dwarf_Debug dbg,
+    Dwarf_Unsigned         objtype /* Elf ET_EXEC etc */,
+    struct likely_names_s *ln,
+    Dwarf_Unsigned         count)
 {
-    struct likely_names_s * ln = 0;
-    int ct = 0;
-    Dwarf_Unsigned baselow = 0;
-    Dwarf_Unsigned basesize = 0;
-    Dwarf_Unsigned baseend = 0;
-    int lnindex = 0;
-    int lncount = 0;
+    Dwarf_Unsigned ct = 0;
+    unsigned int  etype = objtype&0xff;
 
-    memset(likely_names,0,sizeof(likely_names));
-    for (ct = 0 ; ct < LIKELYNAMESMAX; ct++) {
-        Dwarf_Unsigned clow = 0;
+    if (etype != ET_DYN && etype != ET_EXEC &&
+        etype != ET_REL) {
+        /* We do not know what this is. */
+        return DW_DLV_OK;
+    }
+    for (ct = 0 ; ct < count; ct++) {
+        Dwarf_Unsigned caddr = 0;
         Dwarf_Unsigned csize = 0;
+        Dwarf_Unsigned cflags = 0;
+        Dwarf_Unsigned coffset = 0;
+        const char    *cname = 0;
         int res = 0;
         Dwarf_Error err = 0;
-        /* Just looks for .text and .init and  .fini for ranges. */
-        const char *name = likely_ns[ct];
+        struct likely_names_s *lx = 0;
 
-        ln = likely_names + lnindex;
+        lx = ln + ct;
+        /*  The truncation of ct here is awful. Sorry. */
+        res = dwarf_get_section_info_by_index_a(dbg,(int)ct,&cname,
+            &caddr,&csize,&cflags,&coffset,&err);
+        if (res == DW_DLV_ERROR) {
+            dwarf_dealloc_error(dbg,err);
+            return res;
+        }
+        if (res == DW_DLV_NO_ENTRY) {
+            continue;
+        }
+        if (!(cflags & SHF_ALLOC)) {
+            continue;
+        }
+        lx->name = cname;
+        lx->low = caddr;
+        lx->size = csize;
+        lx->end = csize +caddr;
+        /* Horrible cast. Sorry. */
+        lx->origindex = (int)ct;
+    }
+    return DW_DLV_OK;
+}
+
+/*  There is no error arg.  We return DW_DLV_ERROR or
+    DW_DLV_NO_ENTRY or DW_DLV_OK  */
+static int
+limit_of_code_non_elf(Dwarf_Debug dbg,
+    struct likely_names_s *ln,
+    Dwarf_Unsigned lncount,
+    Dwarf_Unsigned *basesize_out,
+    Dwarf_Unsigned *baselow_out)
+{
+    Dwarf_Unsigned basesize = 0;
+    Dwarf_Unsigned baselow = 0;
+    Dwarf_Unsigned ct = 0;
+    Dwarf_Unsigned lnindex = 0;
+
+    for (ct = 0 ; ct < lncount; ct++) {
+        Dwarf_Unsigned clow = 0;
+        Dwarf_Unsigned csize = 0;
+        int            res = 0;
+        Dwarf_Error    err = 0;
+        /* Just looks for .text and .init and  .fini for ranges. */
+        const char    *name = likely_ns[ct];
+        struct likely_names_s *lx = 0;
+
+        lx = ln + ct;
         res = dwarf_get_section_info_by_name_a(dbg,name,
             &clow,&csize,0,0,&err);
         if (res == DW_DLV_ERROR) {
@@ -888,11 +950,12 @@ calculate_likely_limits_of_code(Dwarf_Debug dbg,
         if (res == DW_DLV_NO_ENTRY) {
             continue;
         }
-        ln->name = name;
-        ln->low = clow;
-        ln->size = csize;
-        ln->end = csize +clow;
-        ln->origindex = ct;
+        lx->name = name;
+        lx->low = clow;
+        lx->size = csize;
+        lx->end = csize +clow;
+        /* Horrible cast. Sorry. */
+        lx->origindex = (int)ct;
         if (ct == ORIGLKLYTEXTINDEX) {
             basesize = csize;
             baselow  = clow;
@@ -903,23 +966,116 @@ calculate_likely_limits_of_code(Dwarf_Debug dbg,
         return DW_DLV_NO_ENTRY;
     }
     if (lnindex == 1) {
-        *lower = baselow;
-        *size  = basesize;
+        *baselow_out = baselow;
+        *basesize_out  = basesize;
         return DW_DLV_OK;
     }
-    lncount = lnindex;
-    qsort(likely_names,lncount,sizeof(struct likely_names_s),
+    return DW_DLV_OK;
+}
+/*  This is a bit slow, but happens only once for a dbg.
+    It is not as much help as I expected in avoiding
+    line table content CHECK warnings because, so far,
+    those come from .init csu code and the DWARF has
+    no subprogram information nor any high/low pc
+    information at all.
+
+    Builds a list of addr, endaddr entries,
+    sorts by addr, merges into an overall low, high pair.
+
+*/
+static int
+calculate_likely_limits_of_code(Dwarf_Debug dbg,
+    Dwarf_Unsigned *lower,
+    Dwarf_Unsigned *size)
+{
+    struct likely_names_s *ln = 0;
+    Dwarf_Bool             ln_is_malloc = FALSE;
+    Dwarf_Unsigned         baselow = 0;
+    Dwarf_Unsigned         basesize = 0;
+    Dwarf_Unsigned         baseend = 0;
+    int                   lnindex = 0;
+    int                   lncount = 0;
+    int                   res = 0;
+    Dwarf_Small           dw_ftype = 0;
+    Dwarf_Small           dw_obj_pointersize = 0;
+    Dwarf_Bool            dw_obj_is_big_endian = 0;
+    Dwarf_Unsigned        dw_obj_machine = 0;
+    Dwarf_Unsigned        dw_obj_type = 0; /* ELF ET_EXEC etc*/
+    Dwarf_Unsigned        dw_obj_flags = 0;
+    Dwarf_Small           dw_path_source = 0;
+    Dwarf_Unsigned        dw_ub_offset = 0;
+    Dwarf_Unsigned        dw_ub_count = 0;
+    Dwarf_Unsigned        dw_ub_index = 0;
+    Dwarf_Unsigned        dw_comdat_groupnumber = 0;
+
+    res = dwarf_machine_architecture_a(dbg,
+        &dw_ftype,
+        &dw_obj_pointersize,
+        &dw_obj_is_big_endian,
+        &dw_obj_machine,
+        &dw_obj_type,
+        &dw_obj_flags,
+        &dw_path_source,
+        &dw_ub_offset,
+        &dw_ub_count,
+        &dw_ub_index,
+        &dw_comdat_groupnumber);
+    if (res != DW_DLV_OK) {
+        return DW_DLV_NO_ENTRY;
+    }
+
+    if (dw_ftype == DW_FTYPE_ELF ) {
+        lncount = (int)dwarf_get_section_count(dbg);
+        if (!lncount) {
+            return DW_DLV_NO_ENTRY;
+        }
+        if (lncount > 50) {
+            /*  Very odd. Let's truncate as
+                it seens sensible to give up finding
+                valid addresses */
+            lncount = 50;
+        }
+        ln = calloc(lncount,sizeof(struct likely_names_s));
+        if (!ln) {
+            return DW_DLV_ERROR;
+        }
+        ln_is_malloc = TRUE;
+        res = limit_of_code_when_elf(dbg,
+            dw_obj_type, ln, lncount);
+        if (res != DW_DLV_OK) {
+            free(ln);
+            ln = 0;
+            return res;
+        }
+    } else {
+        lncount = LIKELYNAMESMAX;
+        memset(likely_names,0,sizeof(likely_names));
+        res = limit_of_code_non_elf(dbg,
+            likely_names,
+            lncount,
+            &basesize,&baselow);
+        ln = likely_names;
+    }
+
+    qsort(ln,lncount,sizeof(struct likely_names_s),
         likelycmp);
-    ln = likely_names;
-    baselow =ln->low;
+    baselow = ln->low;
     basesize =ln->size;
     baseend = ln->end;
     for (lnindex = 1; lnindex<lncount; ++lnindex) {
-        ln = likely_names+lnindex;
-        if (ln->end > baseend) {
-            baseend = ln->end;
+        struct likely_names_s*lx = ln+lnindex;
+        if (lx->end > baseend) {
+            baseend = lx->end;
             basesize = (baseend - baselow);
         }
+    }
+    if (ln_is_malloc) {
+        free(ln);
+    }
+    if (!baselow) {
+        /*  Initial 'page' is certainly not a valid
+            address from dwarf. But ET_REL maybe. */
+        baselow = 512;
     }
     *lower = baselow;
     *size  = basesize;
@@ -940,42 +1096,6 @@ homeify(char *s, struct esb_s* out)
     char *home = getenv("HOME");
     size_t homelen = 0;
 
-#ifdef _WIN32
-    /*  Windows In msys2
-        $HOME might be C:\msys64\home\admin
-        which messes up regression testing.
-        For msys2 with a simple setup this
-        helps regressiontesting.
-    */
-    char *winprefix = "C:/msys64/home/";
-    char *domain = getenv("USERDOMAIN");
-    char *user = getenv("USER");
-    size_t winlen = 15;
-
-    if (domain && !strcmp(domain,"MSYS")) {
-
-        if (strncmp(s,winprefix,winlen)) {
-            /* giving up, not msys2 */
-            esb_append(out,s);
-            return;
-        }
-        if (user) {
-            /*  \\home\\admin
-                Change to $HOME
-                This is a crude way to get some
-                regressiontests to pass.
-            */
-            size_t userlen = strlen(user);
-            esb_append(out,"$HOME");
-            esb_append(out,s+winlen+userlen);
-            return;
-        } else {
-            /* giving up */
-            esb_append(out,s);
-            return;
-        }
-    }
-#endif /* _WIN32 */
     if (!home) {
         /* giving up */
         esb_append(out,s);
@@ -1000,7 +1120,7 @@ homeify(char *s, struct esb_s* out)
         return;
     }
     esb_append(out,"$HOME");
-    /*  Append, starting at the / in x */
+    /*  Append, starting at the / in s */
     esb_append(out,s+homelen);
     return;
 }
@@ -1015,16 +1135,24 @@ process_one_file(
     size_t       temp_path_buf_len,
     struct dwconf_s *l_config_file_data)
 {
-    Dwarf_Debug dbg = 0;
-    Dwarf_Debug dbgtied = 0;
-    int dres = 0;
+    Dwarf_Debug   dbg = 0;
+    Dwarf_Debug   dbgtied = 0;
+    int           dres = 0;
     struct Dwarf_Printf_Callback_Info_s printfcallbackdata;
-    Dwarf_Half elf_address_size = 0;      /* Target pointer size */
-    Dwarf_Error onef_err = 0;
-    const char *title = 0;
+    Dwarf_Half    elf_address_size = 0;      /* Target pointer size */
+    Dwarf_Error   onef_err = 0;
+    const char   *title = 0;
     unsigned char path_source = 0;
-    int localerrno = 0;
+    int           localerrno = 0;
 
+    if (glflags.gf_no_check_duplicated_attributes) {
+        /*  This means libdwarf won't check for duplicated
+            attributes. Generally unwise as this allows
+            a kind of Denial Of Service with a tailored
+            compilation unit: makes some calls
+            with a tailored CU very very very slow. */
+        dwarf_library_allow_dup_attr(TRUE);
+    }
     /*  If using a tied file group number should be
         2 DW_GROUPNUMBER_DWO
         but in a dwp or separate-split-dwarf object then
@@ -1033,11 +1161,14 @@ process_one_file(
     {
         /*  This will go for the real main file, whether
             an underlying dSYM or via debuglink or
-            if those find nothing then the original. */
+            if those find nothing then the original.
+            Unless glflags.gf_no_follow_debuglink
+            or glflags.gf_no_follow_dsym (on Apple) is set! */
         char  *tb = temp_path_buf;
         size_t tblen = temp_path_buf_len;
         title = "dwarf_init_path_dl fails.";
-        if (glflags.gf_no_follow_debuglink) {
+        if (glflags.gf_no_follow_debuglink ||
+            glflags.gf_no_follow_dsym) {
             tb = 0;
             tblen = 0;
         }
@@ -1053,16 +1184,21 @@ process_one_file(
     }
     if (dres == DW_DLV_NO_ENTRY) {
         if (glflags.group_number > 0) {
+            struct esb_s m;
+
+            esb_constructor(&m);
+            homeify((char *)file_name,&m);
             printf("No DWARF information present in %s "
                 "for section group %d \n",
-                file_name,glflags.group_number);
+                sanitized(esb_get_string(&m)),glflags.group_number);
+            esb_destructor(&m);
         } else {
             struct esb_s m;
 
             esb_constructor(&m);
             homeify((char *)file_name,&m);
             printf("No DWARF information present in %s\n",
-                esb_get_string(&m));
+                sanitized(esb_get_string(&m)));
             esb_destructor(&m);
         }
         return dres;
@@ -1125,8 +1261,13 @@ process_one_file(
             /* path_source = DW_PATHSOURCE_basic; */
         }
         if (dres == DW_DLV_NO_ENTRY) {
+            struct esb_s m;
+
+            esb_constructor(&m);
+            homeify((char *)tied_file_name,&m);
             printf("No DWARF information present in tied file: %s\n",
-                tied_file_name);
+                sanitized(esb_get_string(&m)));
+            esb_destructor(&m);
             return dres;
         }
         if (dres == DW_DLV_ERROR) {
@@ -1164,6 +1305,21 @@ process_one_file(
 
     dbgsetup(dbg,l_config_file_data);
     dbgsetup(dbgtied,l_config_file_data);
+    /*  Speed things up by not checking for
+        harmless errors (in libdwarf).
+        As of 25 November 2025 disabled is
+        the default in libdwarf v2.2.1 :
+        dwarf_set_harmless_errors_enabled(dbgtied,0);
+        dwarf_set_harmless_errors_enabled(dbg,0); */
+    if (!glflags.gf_suppress_harmless) {
+        /*  This is the default in dwarfdump: check
+            for harmless errors. So we tell libdwarf
+            to check.  */
+        if (dbgtied) {
+            dwarf_set_harmless_errors_enabled(dbgtied,1);
+        }
+        dwarf_set_harmless_errors_enabled(dbg,1);
+    }
     dres = get_address_size_and_max(dbg,&elf_address_size,0,
         &onef_err);
     if (dres != DW_DLV_OK) {
@@ -1202,7 +1358,7 @@ process_one_file(
         int res = 0;
 
         if (dbgtied) {
-            /*  Assuming tied is exectuable main is dwo/dwp */
+            /*  Assuming tied is executable main is dwo/dwp */
             dbg_with_code = dbgtied;
         }
         res = calculate_likely_limits_of_code(dbg_with_code,
@@ -1246,7 +1402,8 @@ process_one_file(
         update_section_flags_per_groups();
     }
     reset_overall_CU_error_data();
-    if (glflags.gf_info_flag || glflags.gf_line_flag ||
+    if (glflags.gf_print_all_srcfiles ||
+        glflags.gf_info_flag || glflags.gf_line_flag ||
         glflags.gf_types_flag ||
         glflags.gf_check_macros || glflags.gf_macinfo_flag ||
         glflags.gf_macro_flag ||
@@ -1648,6 +1805,50 @@ process_one_file(
             DROP_ERROR_INSTANCE(dbg,lres,err);
         }
     }
+    if (glflags.gf_print_section_allocations) {
+        Dwarf_Unsigned mmap_count = 0;
+        Dwarf_Unsigned mmap_size = 0;
+        Dwarf_Unsigned malloc_count = 0;
+        Dwarf_Unsigned malloc_size = 0;
+        Dwarf_Unsigned total_alloc = 0;
+        enum Dwarf_Sec_Alloc_Pref pref = 0;
+        dwarf_get_mmap_count(dbg,&mmap_count,
+            &mmap_size,
+            &malloc_count, &malloc_size);
+        printf("\n");
+        printf("Section allocation summary:\n");
+        printf("  Count sections mmap-ed          : %8"
+            DW_PR_DUu "\n",
+            mmap_count);
+        printf("  Size sections mmap-ed           : %8"
+            DW_PR_DUu  " (0x%" DW_PR_XZEROS DW_PR_DUx   ")\n",
+            mmap_size,mmap_size);
+
+        printf("  Count sections malloc-ed        : %8"
+            DW_PR_DUu "\n",
+            malloc_count);
+        printf("  Size  sections malloc-ed        : %8"
+            DW_PR_DUu  " (0x%" DW_PR_XZEROS DW_PR_DUx   ")\n",
+            malloc_size,malloc_size);
+        total_alloc = malloc_size + mmap_size;
+        printf("  Total section allocation (bytes): %8"
+            DW_PR_DUu " (0x%"  DW_PR_XZEROS DW_PR_DUx ")\n",
+            total_alloc,total_alloc);
+
+        pref = dwarf_set_load_preference(0);
+        printf("  Global preference for sections  : %s\n",
+            pref == Dwarf_Alloc_Malloc?"Dwarf_Alloc_Malloc":
+            pref == Dwarf_Alloc_Mmap?  "Dwarf_Alloc_Mmap":
+            "<Unknown. an ERROR");
+    }
+    if (glflags.gf_print_all_srcfiles) {
+        dd_print_all_srcfiles();
+        dd_destroy_all_srcfiles();
+    }
+
+    if (glflags.gf_print_language_version_table) {
+        print_language_version_table();
+    }
     if (glflags.gf_debug_addr_missing) {
         printf("\nERROR: At some point "
             "the .debug_addr section was needed but missing, "
@@ -1907,7 +2108,6 @@ should_skip_this_cu(Dwarf_Debug dbg, Dwarf_Bool*should_skip,
 
             } else if (sres == DW_DLV_ERROR) {
                 struct esb_s m;
-                int dwarf_names_print_on_error = 1;
 
                 dwarf_dealloc_attribute(attrib);
                 attrib = 0;
@@ -1915,8 +2115,7 @@ should_skip_this_cu(Dwarf_Debug dbg, Dwarf_Bool*should_skip,
                 esb_append(&m,"In determining if we should "
                     "skip this CU dwarf_formstring "
                     "gets an error on form ");
-                esb_append(&m,get_FORM_name(theform,
-                    dwarf_names_print_on_error));
+                esb_append(&m,get_FORM_name(theform));
                 esb_append(&m,".");
 
                 print_error_and_continue(
@@ -2294,7 +2493,7 @@ build_linkonce_info(Dwarf_Debug dbg)
     nCount = dwarf_get_section_count(dbg);
 
     /*  FIXME: dwarf_get_section_info_by_index_a() only
-        works for section indicies
+        works for section indices
         as int. It works acceptably, but will fail with
         more than 32000 sections
         (a very large number) with 32bit Windows. */
@@ -2328,9 +2527,11 @@ build_linkonce_info(Dwarf_Debug dbg)
             error = 0;
         }
     }
-    if (dump_linkonce_info) {
+    if ( glflags.nTrace[KIND_LINKONCE_INFO]) {
+        /* see --trace=2 option */
         /*  Unlikely this is ever useful...at present. */
-        PrintBucketGroup(glflags.pLinkonceInfo);
+        PrintBucketGroup("SN linkonce setup done dd A",
+            glflags.pLinkonceInfo);
     }
 }
 
@@ -2520,14 +2721,6 @@ dump_unique_errors_table(void)
 void
 release_unique_errors_table(void)
 {
-#if 0
-    The pointed-to entries are all saved in makename,
-    so let its destructor do the work.
-    unsigned int index;
-    for (index = 0; index < set_unique_errors_entries; ++index) {
-        free(set_unique_errors[index]);
-    }
-#endif
     free(set_unique_errors);
     set_unique_errors = 0;
     set_unique_errors_entries = 0;
@@ -2738,21 +2931,27 @@ const char * get_pathsource_name(Dwarf_Small ps)
     return psn[ps];
 }
 
-static const char *
+static void
 get_machine_name(Dwarf_Unsigned machine,
-    Dwarf_Small ftype)
+    Dwarf_Small ftype,
+    struct esb_s *out)
 {
     switch(ftype) {
     case DW_FTYPE_ELF:
-        return dd_elf_arch_name(machine);
+        dd_get_elf_machine_name(machine, out);
+        return;
     case DW_FTYPE_PE:
-        return dd_pe_arch_name(machine);
+        esb_append(out, dd_pe_arch_name(machine));
+        return;
     case DW_FTYPE_APPLEUNIVERSAL:
     case DW_FTYPE_MACH_O:
-        return dd_mach_arch_name(machine);
+        esb_append(out,dd_mach_arch_name(machine));
+        return;
     default:
-        return "Unexpected DW_FTYPE!";
+        esb_append(out,"Unexpected DW_FTYPE (file type)!");
+        break;
     }
+    return;
 }
 
 /*  'machine' number meaning the cpu architecture */
@@ -2770,6 +2969,8 @@ print_machine_arch(Dwarf_Debug dbg)
     Dwarf_Unsigned dw_ub_count = 0;
     Dwarf_Unsigned dw_ub_index = 0;
     Dwarf_Unsigned dw_comdat_groupnumber = 0;
+    struct esb_s   esbname;
+
     res = dwarf_machine_architecture(dbg,
         &dw_ftype,
         &dw_obj_pointersize,
@@ -2793,9 +2994,14 @@ print_machine_arch(Dwarf_Debug dbg)
     printf("  Pointersize           : %u\n",dw_obj_pointersize);
     printf("  endian                : %s\n", dw_obj_is_big_endian?
         "big endian":"little endian");
+
+    esb_constructor(&esbname);
+    get_machine_name(dw_obj_machine, dw_ftype,&esbname);
     printf("  machine/architecture  : %" DW_PR_DUu " (0x%" DW_PR_DUx
         ") <%s>\n",dw_obj_machine,dw_obj_machine,
-            get_machine_name(dw_obj_machine, dw_ftype));
+            esb_get_string(&esbname));
+    esb_destructor(&esbname);
+
     printf("  machine flags         : 0x%" DW_PR_DUx "\n",
         dw_obj_flags);
     printf("  path source           : %u  (%s)\n",dw_path_source,

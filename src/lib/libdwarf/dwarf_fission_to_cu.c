@@ -88,6 +88,7 @@ load_xu_loclists_into_cucontext(Dwarf_Debug dbg,
     struct Dwarf_Loclists_Context_s localcontxt;
     Dwarf_Loclists_Context buildhere = &localcontxt;
     Dwarf_Unsigned nextset = 0;
+    Dwarf_Unsigned loclists_count = 0;
     int res = 0;
 
     if (!fsd) {
@@ -95,6 +96,13 @@ load_xu_loclists_into_cucontext(Dwarf_Debug dbg,
             "DW_DLE_XU_TYPE_ARG_ERROR: a required argument to"
             "load_xu_loclists_into_cucontext() is NULL");
         return DW_DLV_ERROR;
+    }
+    if (! dbg->de_debug_loclists.dss_data) {
+        /*  Sets dbg->de_loclists_count if success */
+        res = dwarf_load_loclists(dbg,&loclists_count,error);
+        if (res != DW_DLV_OK) {
+            return res;
+        }
     }
     localcontxt = localcontxt_zero;
     size = fsd->pcu_size[fsd_index];
@@ -115,16 +123,12 @@ load_xu_loclists_into_cucontext(Dwarf_Debug dbg,
         buildhere,
         &nextset,error);
     if (res != DW_DLV_OK) {
-        free(buildhere->lc_offset_value_array);
-        buildhere->lc_offset_value_array = 0;
         return res;
     }
     cu_context->cc_loclists_base_present = TRUE;
     cu_context->cc_loclists_base_contr_size = size;
     cu_context->cc_loclists_base            =
         buildhere->lc_offsets_off_in_sect;
-    free(buildhere->lc_offset_value_array);
-    buildhere->lc_offset_value_array = 0;
     return DW_DLV_OK;
 }
 
@@ -295,10 +299,6 @@ load_xu_rnglists_into_cucontext(Dwarf_Debug dbg,
 
     cu_context->cc_rnglists_base  =
         buildhere->rc_offsets_off_in_sect;
-printf("debug SET rnglists base from rc_offsetts_off_in_sectt: "
-"0x%lx lie %d\n",
-(unsigned long)cu_context->cc_rnglists_base,
-__LINE__);
     cu_context->cc_rnglists_base_present = TRUE;
     cu_context->cc_rnglists_base_contr_size = size;
     /* FIXME cc_rnglists_header_length_present? */
@@ -346,7 +346,8 @@ _dwarf_find_all_offsets_via_fission(Dwarf_Debug dbg,
     for (si = 0; si < smax ; ++si) {
         int sec_index = 0;
 
-        memset(&fission_data,0,sizeof(fission_data));
+        fission_data = fission_data_zero;
+        /*memset(&fission_data,0,sizeof(fission_data)); */
         fdres = dwarf_get_debugfission_for_key(dbg,
             &cu_context->cc_signature,
             keylist[si],

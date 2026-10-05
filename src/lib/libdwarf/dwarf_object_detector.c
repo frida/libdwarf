@@ -489,6 +489,9 @@ is_mach_o_magic(struct elf_header *h,
     return TRUE;
 }
 
+/*  This is part of the public API. Not usable
+    to detect inner binaries from
+    a MacOS universal binary. */
 int
 dwarf_object_detector_fd(int fd,
     unsigned *ftype,
@@ -507,36 +510,44 @@ dwarf_object_detector_fd(int fd,
     return res;
 }
 
+static const struct elf_header h_zero;
+
+/*  We are using an ELF 32 header as a stand-in for
+    whichever header type we are actually reading.   */
+
 int
 _dwarf_object_detector_fd_a(int fd,
     unsigned *ftype,
     unsigned *endian,
     unsigned *offsetsize,
     Dwarf_Unsigned fileoffsetbase,
-    Dwarf_Unsigned  *filesize,
+    Dwarf_Unsigned  *filesize_out,
     int *errcode)
 {
     struct elf_header h;
     Dwarf_Unsigned readlen = sizeof(h);
-    Dwarf_Unsigned fsize = 0;
+    Dwarf_Unsigned filesize = 0;
     Dwarf_Unsigned remaininglen  = 0;
     int            res = 0;
 
-    res = _dwarf_seekr(fd,0,SEEK_END,&fsize);
-    if (res != DW_DLV_OK) {
-        *errcode = DW_DLE_SEEK_ERROR;
-        return DW_DLV_ERROR;
+    h = h_zero;
+    {
+        res = _dwarf_seekr(fd,0,SEEK_END,&filesize);
+        if (res != DW_DLV_OK) {
+            *errcode = DW_DLE_SEEK_ERROR;
+            return DW_DLV_ERROR;
+        }
     }
-    if (fsize <= readlen) {
+    if (filesize <= readlen) {
         /* Not a real object file */
         *errcode = DW_DLE_FILE_TOO_SMALL;
         return DW_DLV_ERROR;
     }
-    if (fsize <= fileoffsetbase) {
+    if (filesize <= fileoffsetbase) {
         *errcode = DW_DLE_SEEK_ERROR;
         return DW_DLV_ERROR;
     }
-    remaininglen = fsize - fileoffsetbase;
+    remaininglen = filesize - fileoffsetbase;
     if (remaininglen <= readlen) {
         /* Not a real object file */
         *errcode = DW_DLE_FILE_TOO_SMALL;
@@ -544,16 +555,14 @@ _dwarf_object_detector_fd_a(int fd,
     }
     /*  fileoffsetbase is non zero iff we have
         an Apple Universal Binary. */
-    res = _dwarf_seekr(fd,fileoffsetbase,SEEK_SET,0);
-    if (res != DW_DLV_OK) {
-        *errcode = DW_DLE_SEEK_ERROR;
+    if (readlen > remaininglen) {
+        /* Not a real object file */
+        *errcode = DW_DLE_FILE_TOO_SMALL;
         return DW_DLV_ERROR;
     }
-    res = _dwarf_readr(fd,(char *)&h,readlen,0);
-    if (res != DW_DLV_OK) {
-        *errcode = DW_DLE_READ_ERROR;
-        return DW_DLV_ERROR;
-    }
+    res = _dwarf_object_read_random(fd, (char *)&h,
+        fileoffsetbase,
+        readlen, filesize,errcode);
     if (h.e_ident[0] == 0x7f &&
         h.e_ident[1] == 'E' &&
         h.e_ident[2] == 'L' &&
@@ -565,28 +574,28 @@ _dwarf_object_detector_fd_a(int fd,
             return res;
         }
         *ftype = DW_FTYPE_ELF;
-        *filesize = (Dwarf_Unsigned)fsize;
+        *filesize_out = (Dwarf_Unsigned)filesize;
         return DW_DLV_OK;
     }
     if (is_mach_o_universal(&h,endian,offsetsize)) {
         *ftype = DW_FTYPE_APPLEUNIVERSAL;
-        *filesize = (Dwarf_Unsigned)fsize;
+        *filesize_out = (Dwarf_Unsigned)filesize;
         return DW_DLV_OK;
     }
     if (is_mach_o_magic(&h,endian,offsetsize)) {
         *ftype = DW_FTYPE_MACH_O;
-        *filesize = (Dwarf_Unsigned)fsize;
+        *filesize_out = (Dwarf_Unsigned)filesize;
         return DW_DLV_OK;
     }
     if (is_archive_magic(&h)) {
         *ftype = DW_FTYPE_ARCHIVE;
-        *filesize = (Dwarf_Unsigned)fsize;
+        *filesize_out = (Dwarf_Unsigned)filesize;
         return DW_DLV_OK;
     }
-    res = is_pe_object(fd,fsize,endian,offsetsize,errcode);
+    res = is_pe_object(fd,filesize,endian,offsetsize,errcode);
     if (res == DW_DLV_OK ) {
         *ftype = DW_FTYPE_PE;
-        *filesize = (Dwarf_Unsigned)fsize;
+        *filesize_out = (Dwarf_Unsigned)filesize;
         return DW_DLV_OK;
     }
     /* Unknown object format. */
@@ -642,8 +651,9 @@ dwarf_object_detector_path_dSYM(
             return DW_DLV_NO_ENTRY;
         }
         *pathsource = DW_PATHSOURCE_dsym;
-        res = dwarf_object_detector_fd(fd,
-            ftype,endian,offsetsize,filesize,errcode);
+        res = _dwarf_object_detector_fd_a(fd,
+            ftype,endian,offsetsize,0,
+            filesize,errcode);
         if (res != DW_DLV_OK) {
             _dwarf_closer(fd);
             return res;
@@ -855,6 +865,10 @@ _dwarf_debuglink_finder_internal(
     if (res == DW_DLV_NO_ENTRY) {
         return res;
     }
+    /*  If an exe (with debuglink, possibly) has no DWARF
+        sections we should not give up till we look for
+        debuglink stuff, which as of gitbub issue 297,
+        no longer results in DW_DLV_NO_ENTRY. */
     for (p = 0;  p < gl_pathcount; ++p) {
         const char *lpath = 0;
 
@@ -932,7 +946,7 @@ dwarf_object_detector_path_b(
     unsigned *    ftype,
     unsigned *    endian,
     unsigned *    offsetsize,
-    Dwarf_Unsigned * filesize,
+    Dwarf_Unsigned * filesize_out,
     unsigned char *  pathsource,
     int *errcode)
 {
@@ -991,7 +1005,7 @@ dwarf_object_detector_path_b(
         }
         dwarfstring_destructor(&m);
         fd = _dwarf_openr(outpath);
-        /* fall through to get fsize etc */
+        /* fall through to get filesize etc */
     } else {
         lpathsource = DW_PATHSOURCE_basic;
         fd = _dwarf_openr(path);
@@ -1002,8 +1016,9 @@ dwarf_object_detector_path_b(
         }
         return DW_DLV_NO_ENTRY;
     }
-    res = dwarf_object_detector_fd(fd,
-        ftype,endian,offsetsize,filesize,errcode);
+    res = _dwarf_object_detector_fd_a(fd,
+        ftype,endian,offsetsize,0,
+        filesize_out,errcode);
     if (res != DW_DLV_OK) {
         lpathsource = DW_PATHSOURCE_unspecified;
     }

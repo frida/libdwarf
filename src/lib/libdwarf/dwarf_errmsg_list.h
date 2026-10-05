@@ -690,6 +690,25 @@ static const char _dwarf_errmsgs[DW_DLE_LAST+1][DW_MAX_MSG_LEN] = {
 {"DW_DLE_PE_SECTION_SIZE_HEURISTIC_FAIL(504) Section size fails "
     "a heuristic sanity check"},
 {"DW_DLE_LLE_ERROR(505) Generic .debug_loclists read error"},
-{"DW_DLE_RLE_ERROR(506) Generic .debug_rnglists read error"}
+{"DW_DLE_RLE_ERROR(506) Generic .debug_rnglists read error"},
+{"DW_DLE_MACHO_SEGMENT_COUNT_HEURISTIC_FAIL(507) "
+    "MachO object seems corrupt"},
+{"DW_DLE_DUPLICATE_NOTE_GNU_BUILD_ID(508) Duplicated section "},
+{"DW_DLE_SYSCONF_VALUE_UNUSABLE(509) sysconf() return is < 200 "
+    "or greater than 100million"},
+{ "DW_DLE_FRAME_ITERATOR_ERR(510) Error creating frame data"},
+{ "DW_DLE_FRAME_FDE_TABLE_ERR(511) Possibly a libdwarf internal "
+    "error related to Dwarf_Regtab3 data." },
+{"DW_DLE_COMPRESSED_FORMAT_ODD(512) Error unknown compression "
+    "type, possibly a corrupt object file."},
+{"DW_DLE_COMPRESSED_FORMAT_UNKNOWN(513) Neither zlib nor zstd. "
+    "Possibly a corrupt object file"},
+{"DW_DLE_ALLOC_DECOMPRESS_FAIL(514) malloc() space for uncompressed"
+    "section content failed."},
+{"DW_DLE_ZSTD_DATA_ERROR(515) ZSTD decompress library call failed"},
+{"DW_DLE_ZLIB_ZSTD_MISSING(516) Cannot decompress a section without "
+    "zlib and zstd libraries"},
+{"DW_DLE_ELF_GRPSTRING_SECTION_ERROR(517) A section marked"
+    " as SHT_GROUP and named as stringtable. Corrupt Elf" }
 };
 #endif /* DWARF_ERRMSG_LIST_H */

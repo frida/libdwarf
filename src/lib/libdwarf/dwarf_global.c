@@ -85,7 +85,7 @@ _dwarf_fix_up_offset_irix(Dwarf_Debug dbg,
 #endif /* __sgi */
 
 #if 0 /* debug_print_range (debugging) */
-/*  Debugging only. Requires start. can calulate one of len, end */
+/*  Debugging only. Requires start. can calculate one of len, end */
 static void
 debug_print_range(const char *msg,
     int lineno,
@@ -237,7 +237,7 @@ _dwarf_chain_to_array(Dwarf_Debug dbg,
             dwarf_dealloc(dbg, prev, DW_DLA_CHAIN);
         }
     }
-    head_chain = 0; /* Unneccesary, but showing intent. */
+    head_chain = 0; /* Unnecessary, but showing intent. */
     *globals = ret_globals;
     return DW_DLV_OK;
 }
@@ -521,7 +521,7 @@ _dwarf_internal_get_debug_names_globals(Dwarf_Debug dbg,
                     set the rest of the fields.
                     All the translations from disk
                     form to libdwarf types and the sanity
-                    chacking are already done. */
+                    checking are already done. */
             }
             /* we have an entry to set up Dwarf_Global */
             res = _dwarf_make_global_add_to_chain(dbg,
@@ -1037,7 +1037,7 @@ _dwarf_internal_get_pubnames_like(Dwarf_Debug dbg,
                 *out_phead_chain = 0;
                 return mres;
             }
-            /*  die_offset_in_cu may now be zero, meaing
+            /*  die_offset_in_cu may now be zero, meaning
                 end of the pairs list */
             pubnames_like_ptr += pubnames_context->pu_length_size;
             pubnames_like_offset += pubnames_context->pu_length_size;
@@ -1069,7 +1069,6 @@ _dwarf_internal_get_pubnames_like(Dwarf_Debug dbg,
             *out_phead_chain = 0;
             return DW_DLV_ERROR;
         }
-#if 1
         /*  If there is some kind of padding at the end of
             the section, following a pairs terminator,
             as emitted by some compilers, skip over that padding and
@@ -1084,7 +1083,6 @@ _dwarf_internal_get_pubnames_like(Dwarf_Debug dbg,
                 pubnames_like_offset = finaloffset;
             }
         }
-#endif
         pubnames_like_ptr = pubnames_ptr_past_end_cu;
     } while (pubnames_like_ptr < section_end_ptr);
     *return_count = global_count;
@@ -1428,6 +1426,7 @@ dwarf_global_name_offsets(Dwarf_Global global,
     Dwarf_Global_Context con = 0;
     Dwarf_Debug dbg = 0;
     Dwarf_Off cuhdr_off = 0;
+    Dwarf_Off cuhsum = 0;
 
     if (global == NULL) {
         _dwarf_error(NULL, error, DW_DLE_GLOBAL_NULL);
@@ -1456,9 +1455,21 @@ dwarf_global_name_offsets(Dwarf_Global global,
     CHECK_DBG(dbg,error,"dwarf_global_name_offsets()");
     /*  Cannot refer to debug_types, see p141 of
         DWARF4 Standard */
+    cuhsum = cuhdr_off + MIN_CU_HDR_SIZE;
+    if (cuhsum < cuhdr_off || cuhsum < MIN_CU_HDR_SIZE) {
+        /*overflow*/
+        dwarfstring m;
+
+        dwarfstring_constructor(&m);
+        build_off_end_msg(cuhdr_off,cuhdr_off,
+            dbg->de_debug_info.dss_size,&m);
+        _dwarf_error_string(dbg, error, DW_DLE_OFFSET_BAD,
+            dwarfstring_string(&m));
+        dwarfstring_destructor(&m);
+        return DW_DLV_ERROR;
+    }
     if (dbg->de_debug_info.dss_size &&
-        ((cuhdr_off + MIN_CU_HDR_SIZE) >=
-        dbg->de_debug_info.dss_size)) {
+        cuhsum >= dbg->de_debug_info.dss_size) {
         dwarfstring m;
 
         dwarfstring_constructor(&m);

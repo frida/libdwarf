@@ -63,8 +63,23 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stddef.h> /* size_t */
 #include <stdlib.h> /* free() malloc() */
+#ifdef HAVE_UNISTD_H
+#include <unistd.h> /* sysconf */
+#endif /* HAVE_UNISTD_H */
+#ifdef HAVE_FULL_MMAP
+#include <sys/mman.h> /* mmap */
+#endif /* HAVE_FULL_MMAP */
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>  /*  off_t */
+#endif /* HAVE_SYS_TYPES_H */
 #include <stdio.h> /* debug printf */
 #include <string.h> /* memset() strdup() strncmp() */
+#ifdef HAVE_ZLIB_H
+#include "zlib.h"
+#endif /* ZLIB */
+#ifdef HAVE_ZSTD_H
+#include "zstd.h"
+#endif /* ZSTD */
 
 #include "dwarf.h"
 #include "libdwarf.h"
@@ -156,7 +171,7 @@ static Dwarf_Unsigned elf_get_nolibelf_file_size(void *obj)
     return elf->f_filesize;
 }
 
-static Dwarf_Unsigned elf_get_nolibelf_section_count (void *obj)
+static Dwarf_Unsigned elf_get_nolibelf_section_count(void *obj)
 {
     dwarf_elf_object_access_internals_t *elf =
         (dwarf_elf_object_access_internals_t*)(obj);
@@ -191,8 +206,47 @@ static int elf_get_nolibelf_section_info(void *obj,
 }
 
 static int
-elf_load_nolibelf_section (void *obj, Dwarf_Unsigned section_index,
-    Dwarf_Small **return_data, int *error)
+elf_load_find_sec_ptr(void *obj,Dwarf_Unsigned section_index,
+    struct generic_shdr **sp_inout,
+    int *decompressme, int *errorc)
+{
+    dwarf_elf_object_access_internals_t *elf =
+        (dwarf_elf_object_access_internals_t*)(obj);
+
+    (void)errorc;
+    if (0 < section_index &&
+        section_index < elf->f_loc_shdr.g_count) {
+        struct generic_shdr *sp =
+            elf->f_shdr + section_index;
+
+        if (!sp->gh_size) {
+            return DW_DLV_NO_ENTRY;
+        }
+        *sp_inout = sp;
+        if (sp->gh_flags & SHF_COMPRESSED) {
+            switch(sp->gh_type) {
+            case SHT_STRTAB:
+            case SHT_SYMTAB:
+            case SHT_REL:
+            case SHT_RELA:
+                *decompressme = TRUE;
+                break;
+            case SHT_NOBITS:
+            default:
+                break;
+            }
+        }
+        return DW_DLV_OK;
+    }
+    return DW_DLV_NO_ENTRY;
+}
+
+/*  This interface does not support mmap. It is malloc only
+    Use return_data to return a pointer to an in-memory
+    area with section content. */
+static int
+elf_load_nolibelf_section(void *obj, Dwarf_Unsigned section_index,
+    Dwarf_Small **return_data, int *errorc)
 {
     /*  Linux kernel read size limit 0x7ffff000,
         Without any good reason, limit our reads
@@ -204,63 +258,295 @@ elf_load_nolibelf_section (void *obj, Dwarf_Unsigned section_index,
     Dwarf_Small *  read_target = 0;
     dwarf_elf_object_access_internals_t *elf =
         (dwarf_elf_object_access_internals_t*)(obj);
+    struct generic_shdr *sp = 0;
+    int decompressme = FALSE;
+    int res = 0;
 
-    if (0 < section_index &&
-        section_index < elf->f_loc_shdr.g_count) {
-        int res = 0;
-
-        struct generic_shdr *sp =
-            elf->f_shdr + section_index;
-        if (sp->gh_content) {
-            *return_data = (Dwarf_Small *)sp->gh_content;
-            return DW_DLV_OK;
-        }
-        if (!sp->gh_size) {
-            return DW_DLV_NO_ENTRY;
-        }
-        /*  Guarding against bad values and
-            against overflow */
-        if (sp->gh_size > elf->f_filesize ||
-            sp->gh_offset > elf->f_filesize ||
-            (sp->gh_size + sp->gh_offset) >
-                elf->f_filesize) {
-            *error = DW_DLE_ELF_SECTION_ERROR;
-            return DW_DLV_ERROR;
-        }
-
-        sp->gh_content = malloc((size_t)sp->gh_size);
-        if (!sp->gh_content) {
-            *error = DW_DLE_ALLOC_FAIL;
-            return DW_DLV_ERROR;
-        }
-        /*  Linux has a 2GB limit on read size.
-            So break this into 2gb pieces.  */
-        remaining_bytes = sp->gh_size;
-        read_size = remaining_bytes;
-        read_offset = sp->gh_offset;
-        read_target = (Dwarf_Small*)sp->gh_content;
-        for ( ; remaining_bytes > 0; read_size = remaining_bytes ) {
-            if (read_size > read_size_limit) {
-                read_size = read_size_limit;
-            }
-            res = RRMOA(elf->f_fd,
-                (void *)read_target, read_offset,
-                read_size,
-                elf->f_filesize, error);
-            if (res != DW_DLV_OK) {
-                free(sp->gh_content);
-                sp->gh_content = 0;
-                return res;
-            }
-            remaining_bytes -= read_size;
-            read_offset += read_size;
-            read_target += read_size;
-        }
+    res = elf_load_find_sec_ptr(obj,section_index,&sp,
+        &decompressme,errorc);
+    if (res != DW_DLV_OK) {
+        return res;
+    }
+    if (sp->gh_content) {
         *return_data = (Dwarf_Small *)sp->gh_content;
         return DW_DLV_OK;
     }
-    return DW_DLV_NO_ENTRY;
+    /*  Guarding against bad values and
+        against overflow */
+    if (sp->gh_size > elf->f_filesize ||
+        sp->gh_offset > elf->f_filesize ||
+        (sp->gh_size + sp->gh_offset) >
+            elf->f_filesize) {
+        *errorc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+
+    sp->gh_load_type = Dwarf_Alloc_Malloc;
+    sp->gh_content = malloc((size_t)sp->gh_size);
+    if (!sp->gh_content) {
+        *errorc = DW_DLE_ALLOC_FAIL;
+        return DW_DLV_ERROR;
+    }
+    /*  Linux has a 2GB limit on read size.
+        So break this into 2gb pieces.  */
+    remaining_bytes = sp->gh_size;
+    read_size = remaining_bytes;
+    read_offset = sp->gh_offset;
+    read_target = (Dwarf_Small*)sp->gh_content;
+    for ( ; remaining_bytes > 0; read_size = remaining_bytes ) {
+        if (read_size > read_size_limit) {
+            read_size = read_size_limit;
+        }
+        res = RRMOA(elf->f_fd,
+            (void *)read_target, read_offset,
+            read_size,
+            elf->f_filesize, errorc);
+        if (res != DW_DLV_OK) {
+            free(sp->gh_content);
+            sp->gh_content = 0;
+            return res;
+        }
+        remaining_bytes -= read_size;
+        read_offset += read_size;
+        read_target += read_size;
+    }
+    sp->gh_was_alloc = TRUE;
+    sp->gh_load_type = Dwarf_Alloc_Malloc;
+
+    if (decompressme) {
+        Dwarf_Unsigned flags = sp->gh_flags;
+        if (flags& SHF_COMPRESSED) {
+#if defined(HAVE_ZLIB) && defined(HAVE_ZSTD)
+            *errorc = 0;
+            /* decompress and set new section size */
+            _dwarf_do_decompress_elf(elf,sp,errorc);
+            if (*errorc) {
+                free(sp->gh_content);
+                sp->gh_content = 0;
+                return DW_DLV_ERROR;
+            }
+#else /* COMPRESSED TEST */
+            *errorc = DW_DLE_ZLIB_ZSTD_MISSING;
+            return DW_DLV_ERROR;
+#endif /* COMPRESSED TEST */
+        }
+    }
+    *return_data = (Dwarf_Small *)sp->gh_content;
+    return DW_DLV_OK;
 }
+
+#ifdef HAVE_FULL_MMAP
+
+static int
+_dwarf_mmap_calc(Dwarf_Unsigned baseoff,
+    Dwarf_Unsigned objsecoff,
+    Dwarf_Unsigned seclen,
+    Dwarf_Unsigned filesize,
+    Dwarf_Unsigned *return_mmap_offset,
+    Dwarf_Unsigned *return_mmap_len,
+    Dwarf_Unsigned *return_pagesizebits,
+    int *errc)
+{
+    Dwarf_Unsigned computed_mmaplen = 0;
+    Dwarf_Unsigned computed_mmapend = 0;
+    long           pagesize = sysconf(_SC_PAGESIZE);
+    Dwarf_Unsigned upagesize = 0;
+    Dwarf_Unsigned pagesizebits = 0;
+    Dwarf_Unsigned pageoff = 0;
+    Dwarf_Unsigned tempmmaplen = 0;
+    Dwarf_Unsigned pageadjust = 0;
+    Dwarf_Unsigned secoff= 0;
+
+    /*  pagesize is guaranteed to be a multiple of 2,
+        and will be >= 512 and is usually 4096.
+        this helps Coverityscan know that subtracting one
+        from pagesize will not result in an
+        anomalous number. */
+    if (pagesize < 200L || pagesize > (128L*1024L*1024L)) {
+        /*  verifying the value of pagesize to help fix
+            Coverity scan CID  531843 */
+        *errc = DW_DLE_SYSCONF_VALUE_UNUSABLE;
+        return DW_DLV_ERROR;
+    }
+    /*  This is where there are multiple objects in a file,
+        such as a MacOS universal binary */
+    secoff = objsecoff + baseoff;
+    if (secoff < objsecoff ||
+        secoff < baseoff) {
+        *errc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+    upagesize = (Dwarf_Unsigned)pagesize;
+    pagesizebits = upagesize -1;
+    /*  Guarding against bad values and
+        mmap of tiny sections. */
+    if (seclen > filesize ||
+        secoff > filesize ||
+        (seclen + secoff) > filesize ||
+        seclen < (4096*2)) {
+        *errc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+
+    pageoff = secoff & ~pagesizebits;
+    /*  Coverity scan CID 581843. Guarding
+        against possible overflow complaint
+        in computing computed_mmaplen. */
+    computed_mmaplen = seclen;
+    if (secoff <  pageoff) {
+        *errc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+    pageadjust = secoff - pageoff;
+
+    tempmmaplen = computed_mmaplen + pageadjust;
+    if (tempmmaplen < computed_mmaplen ||
+        tempmmaplen < pageadjust) {
+        /* overflow */
+        *errc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+    computed_mmaplen = tempmmaplen;
+    tempmmaplen = computed_mmaplen + pagesizebits;
+    if (tempmmaplen > filesize ||
+        tempmmaplen < computed_mmaplen ||
+        tempmmaplen < pagesizebits) {
+        *errc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+    computed_mmaplen = tempmmaplen;
+    computed_mmaplen &= ~pagesizebits;
+    tempmmaplen = computed_mmaplen+pageoff;
+    if (tempmmaplen > filesize ||
+        tempmmaplen < computed_mmaplen ||
+        tempmmaplen < pagesizebits) {
+        *errc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+    computed_mmapend = computed_mmaplen+pageoff;
+    if (computed_mmapend > filesize ||
+        computed_mmapend < computed_mmaplen ||
+        computed_mmapend  < pageoff) {
+        *errc = DW_DLE_ELF_SECTION_ERROR;
+        return DW_DLV_ERROR;
+    }
+
+    computed_mmaplen = tempmmaplen;
+    *return_mmap_offset = pageoff;
+    *return_mmap_len = computed_mmaplen;
+    *return_pagesizebits = pagesizebits;
+    return DW_DLV_OK;
+}
+
+/*  Calls elf_load_nolibelf_section() if
+    malloc is preferred. */
+static int
+elf_load_nolibelf_section_a(void* obj,
+    Dwarf_Unsigned    dw_section_index,
+    enum Dwarf_Sec_Alloc_Pref *dw_alloc_type,
+    Dwarf_Small   **return_data_ptr,
+    Dwarf_Unsigned *return_data_len,
+    Dwarf_Small   **return_mmap_base_ptr,
+    Dwarf_Unsigned *return_mmap_offset,
+    Dwarf_Unsigned *return_mmap_len,
+    int            *errc)
+{
+    int res  = 0;
+    enum Dwarf_Sec_Alloc_Pref alloc_type_in = *dw_alloc_type;
+    struct generic_shdr *sp = 0;
+    int decompressme = FALSE;
+
+    res = elf_load_find_sec_ptr(obj,dw_section_index,&sp,
+        &decompressme,errc);
+    if (res != DW_DLV_OK) {
+        return res;
+    }
+    if (alloc_type_in == Dwarf_Alloc_Malloc ||
+        TRUE == decompressme) {
+        /*  Does NOT alter *return_data_len
+            unless is symtab/symstr sec compressed*/
+        res = elf_load_nolibelf_section(obj,dw_section_index,
+            return_data_ptr,errc);
+        *return_mmap_base_ptr = 0;
+        *return_mmap_offset = 0;
+        *return_mmap_len = 0;
+        *dw_alloc_type = Dwarf_Alloc_Malloc;
+        /* *return_data_len =  not set */
+        return res;
+    }
+    if (alloc_type_in == Dwarf_Alloc_Mmap) {
+        Dwarf_Unsigned baseoff = 0; /* for Macos might be non-zero
+            but not in Elf */
+        Dwarf_Small   *realarea = (void*)-1;
+        Dwarf_Unsigned computed_mmaplen = 0;
+        Dwarf_Unsigned pageoff = 0;
+        dwarf_elf_object_access_internals_t *elf =
+            (dwarf_elf_object_access_internals_t*)(obj);
+        void *         mmptr = 0;
+
+        Dwarf_Unsigned seclen = 0;
+        Dwarf_Unsigned secoffset = 0;
+        int localerrc = 0;
+        Dwarf_Unsigned pagesizebits = 0;
+
+        seclen = sp->gh_size;
+        secoffset = sp->gh_offset;
+        res = _dwarf_mmap_calc(baseoff,secoffset,
+            seclen,elf->f_filesize,
+            &pageoff,&computed_mmaplen,
+            &pagesizebits,&localerrc);
+        if (res == DW_DLV_ERROR ) {
+            /* Does NOT alter *return_data_len */
+            res = elf_load_nolibelf_section(obj,
+                dw_section_index,
+                return_data_ptr,errc);
+            *return_mmap_base_ptr = 0;
+            *return_mmap_offset = 0;
+            *return_mmap_len = 0;
+            *dw_alloc_type = Dwarf_Alloc_Malloc;
+            /* *return_data_len =  not set */
+            return res;
+        }
+
+        /*  Coverity Scan CID 531843. Possible overflow
+            computing computed_mmaplen.  This is
+            a false positive,  Marked as such
+            in Coverity scan 16 July 2025. */
+        mmptr = mmap(0, (size_t)computed_mmaplen,
+            PROT_READ|PROT_WRITE, MAP_PRIVATE,
+            elf->f_fd,(off_t)pageoff);
+        if (mmptr == (void *)-1) {
+            /* Does NOT alter *return_data_len
+                unless is symtab/symstr sec compressed*/
+            res = elf_load_nolibelf_section(obj,
+                dw_section_index,
+                return_data_ptr,errc);
+            *return_mmap_base_ptr = 0;
+            *return_mmap_offset = 0;
+            *return_mmap_len = 0;
+            *dw_alloc_type = Dwarf_Alloc_Malloc;
+            /* *return_data_len =  not set */
+            return res;
+        }
+        sp->gh_load_type = Dwarf_Alloc_Mmap;
+        realarea = (Dwarf_Small*)mmptr;
+        sp->gh_mmap_realarea = (char*)realarea;
+        sp->gh_computed_mmaplen = computed_mmaplen;
+        sp->gh_content   = (char *)realarea +
+            (secoffset&pagesizebits);
+        sp->gh_was_alloc = TRUE;
+        *return_data_ptr = (Dwarf_Small *)sp->gh_content;
+        *dw_alloc_type =  sp->gh_load_type;
+        *return_data_len = seclen;
+        *return_mmap_base_ptr = realarea;
+        *return_mmap_offset = pageoff;
+        *return_mmap_len = computed_mmaplen;
+        return DW_DLV_OK;
+    }
+    *errc = DW_DLE_ELF_SECTION_ERROR;
+    return DW_DLV_ERROR;
+}
+#endif /* HAVE_FULL_MMAP */
 
 #define MATCH_REL_SEC(i_,s_,r_)  \
 if ((i_) == (s_).dss_index) { \
@@ -270,7 +556,7 @@ if ((i_) == (s_).dss_index) { \
 
 static int
 find_section_to_relocate(Dwarf_Debug dbg,Dwarf_Unsigned section_index,
-    struct Dwarf_Section_s **relocatablesec, int *error)
+    struct Dwarf_Section_s **relocatablesec, int *errorc)
 {
     MATCH_REL_SEC(section_index,dbg->de_debug_info,relocatablesec);
     MATCH_REL_SEC(section_index,dbg->de_debug_abbrev,relocatablesec);
@@ -320,7 +606,7 @@ find_section_to_relocate(Dwarf_Debug dbg,Dwarf_Unsigned section_index,
     /* dbg-> de_debug_str,syms); */
     /* de_elf_symtab,syms); */
     /* de_elf_strtab,syms); */
-    *error = DW_DLE_RELOC_SECTION_MISMATCH;
+    *errorc = DW_DLE_RELOC_SECTION_MISMATCH;
     return DW_DLV_ERROR;
 }
 
@@ -332,7 +618,7 @@ update_entry(Dwarf_Debug dbg,
     struct generic_rela *rela,
     Dwarf_Small *target_section,
     Dwarf_Unsigned target_section_size,
-    int *error)
+    int *errorc)
 {
     unsigned int type = 0;
     unsigned int sym_idx = 0;
@@ -348,14 +634,14 @@ update_entry(Dwarf_Debug dbg,
     type = (unsigned int)rela->gr_type;
     sym_idx = (unsigned int)rela->gr_sym;
     if (sym_idx >= obj->f_loc_symtab.g_count) {
-        *error = DW_DLE_RELOC_SECTION_SYMBOL_INDEX_BAD;
+        *errorc = DW_DLE_RELOC_SECTION_SYMBOL_INDEX_BAD;
         return DW_DLV_ERROR;
     }
     symp = obj->f_symtab + sym_idx;
     if (offset >= target_section_size) {
         /*  If offset really big, any add will overflow.
             So lets stop early if offset is corrupt. */
-        *error = DW_DLE_RELOC_INVALID;
+        *errorc = DW_DLE_RELOC_INVALID;
         return DW_DLV_ERROR;
     }
     /* Determine relocation size */
@@ -370,16 +656,16 @@ update_entry(Dwarf_Debug dbg,
             any relocation records of type R_<machine>_NONE.  */
         return DW_DLV_OK;
     } else {
-        *error = DW_DLE_RELOC_SECTION_RELOC_TARGET_SIZE_UNKNOWN;
+        *errorc = DW_DLE_RELOC_SECTION_RELOC_TARGET_SIZE_UNKNOWN;
         return DW_DLV_ERROR;
     }
     if ( (offset + reloc_size) < offset) {
         /* Another check for overflow. */
-        *error = DW_DLE_RELOC_INVALID;
+        *errorc = DW_DLE_RELOC_INVALID;
         return DW_DLV_ERROR;
     }
     if ( (offset + reloc_size) > target_section_size) {
-        *error = DW_DLE_RELOC_INVALID;
+        *errorc = DW_DLE_RELOC_INVALID;
         return DW_DLV_ERROR;
     }
     /*  Assuming we do not need to do a READ_UNALIGNED here
@@ -420,7 +706,7 @@ apply_rela_entries(
     dwarf_elf_object_access_internals_t*obj,
     /* relocatablesec is the .debug_info(etc)  in Dwarf_Debug */
     struct Dwarf_Section_s * relocatablesec,
-    int *error)
+    int *errorc)
 {
     int return_res = DW_DLV_OK;
     struct generic_shdr * rels_shp = 0;
@@ -428,7 +714,7 @@ apply_rela_entries(
     Dwarf_Unsigned i = 0;
 
     if (r_section_index >= obj->f_loc_shdr.g_count) {
-        *error = DW_DLE_SECTION_INDEX_BAD;
+        *errorc = DW_DLE_SECTION_INDEX_BAD;
         return DW_DLV_ERROR;
     }
     rels_shp = obj->f_shdr + r_section_index;
@@ -443,7 +729,7 @@ apply_rela_entries(
     }
     if (!rels_shp->gh_rels) {
         /*  something wrong. */
-        *error = DW_DLE_RELOCS_ERROR;
+        *errorc = DW_DLE_RELOCS_ERROR;
         return DW_DLV_ERROR;
     }
     for (i = 0; i < relcount; i++) {
@@ -451,7 +737,7 @@ apply_rela_entries(
             rels_shp->gh_rels+i,
             relocatablesec->dss_data,
             relocatablesec->dss_size,
-            error);
+            errorc);
         if (res != DW_DLV_OK) {
             /* We try to keep going, not stop. */
             return_res = res;
@@ -472,7 +758,7 @@ static int
 elf_relocations_nolibelf(void* obj_in,
     Dwarf_Unsigned section_index,
     Dwarf_Debug dbg,
-    int* error)
+    int* errorc)
 {
     int res = DW_DLV_ERROR;
     dwarf_elf_object_access_internals_t*obj = 0;
@@ -489,7 +775,7 @@ elf_relocations_nolibelf(void* obj_in,
         to a de_debug_info or other  section record in
         Dwarf_Debug. */
     res = find_section_to_relocate(dbg, section_index,
-        &relocatablesec, error);
+        &relocatablesec, errorc);
     if (res != DW_DLV_OK) {
         return res;
     }
@@ -506,18 +792,18 @@ elf_relocations_nolibelf(void* obj_in,
     section_with_reloc_records = relocatablesec->dss_reloc_index;
     if (!section_with_reloc_records) {
         /* Something is wrong. */
-        *error = DW_DLE_RELOC_SECTION_MISSING_INDEX;
+        *errorc = DW_DLE_RELOC_SECTION_MISSING_INDEX;
         return DW_DLV_ERROR;
     }
     /* The relocations, if they exist, have been loaded. */
     /* The symtab was already loaded. */
     if (!obj->f_symtab || !obj->f_symtab_sect_strings) {
-        *error = DW_DLE_DEBUG_SYMTAB_ERR;
+        *errorc = DW_DLE_DEBUG_SYMTAB_ERR;
         return DW_DLV_ERROR;
     }
     if (obj->f_symtab_sect_index != relocatablesec->dss_reloc_link) {
         /* Something is wrong. */
-        *error = DW_DLE_RELOC_MISMATCH_RELOC_INDEX;
+        *errorc = DW_DLE_RELOC_MISMATCH_RELOC_INDEX;
         return DW_DLV_ERROR;
     }
     /* We have all the data we need in memory. */
@@ -525,50 +811,96 @@ elf_relocations_nolibelf(void* obj_in,
         target, relocablesec */
     res = apply_rela_entries(dbg,
         section_with_reloc_records,
-        obj, relocatablesec,error);
+        obj, relocatablesec,errorc);
     return res;
 }
 
-void
-_dwarf_destruct_elf_nlaccess(
-    struct Dwarf_Obj_Access_Interface_a_s *aip)
+/* Frees ai_object content and ai_object itself. */
+static void
+_dwarf_destruct_elf_nlaccess(void * obj)
 {
+    struct Dwarf_Obj_Access_Interface_a_s *aip =
+        (struct Dwarf_Obj_Access_Interface_a_s *)obj;
     dwarf_elf_object_access_internals_t *ep = 0;
     struct generic_shdr *shp = 0;
     Dwarf_Unsigned shcount = 0;
     Dwarf_Unsigned i = 0;
 
     ep = (dwarf_elf_object_access_internals_t *)aip->ai_object;
-    free(ep->f_ehdr);
     shp = ep->f_shdr;
     shcount = ep->f_loc_shdr.g_count;
     for (i = 0; i < shcount; ++i,++shp) {
+        enum Dwarf_Sec_Alloc_Pref alloc = shp->gh_load_type;
         free(shp->gh_rels);
         shp->gh_rels = 0;
-        free(shp->gh_content);
+        switch(alloc) {
+        case Dwarf_Alloc_Malloc:
+            if (shp->gh_was_alloc) {
+                free(shp->gh_content);
+                shp->gh_content = 0;
+            }
+            break;
+#ifdef HAVE_FULL_MMAP
+        case Dwarf_Alloc_Mmap: {
+            if (shp->gh_was_alloc) {
+                munmap(shp->gh_mmap_realarea,
+                    (size_t)shp->gh_computed_mmaplen);
+                /* If returned non-zero unmap failed */
+                shp->gh_was_alloc = FALSE;
+                shp->gh_mmap_realarea =0;
+                shp->gh_computed_mmaplen = 0;
+            }
+        } break;
+#endif /* HAVE_FULL_MMAP */
+        default: break;
+            /*  something disastrously wrong. No free/mmap */
+        } /* end switch on alloc */
         shp->gh_content = 0;
+        shp->gh_mmap_realarea = (char *)-1;
+        shp->gh_computed_mmaplen = 0;
         free(shp->gh_sht_group_array);
         shp->gh_sht_group_array = 0;
         shp->gh_sht_group_array_count = 0;
     }
-    free(ep->f_shdr);
+    free(ep->f_ehdr);
+    ep->f_ehdr = 0;
     ep->f_loc_shdr.g_count = 0;
     free(ep->f_phdr);
-    free(ep->f_elf_shstrings_data);
-    free(ep->f_dynamic);
-    free(ep->f_symtab_sect_strings);
-    free(ep->f_dynsym_sect_strings);
-    free(ep->f_symtab);
-    free(ep->f_dynsym);
+    ep->f_phdr = 0;
 
+    /*  Whether elf shstrings and symtab strings
+        share the same section or not, we do
+        not need to free these. Section frees
+        of gh_content already did it. */
+    ep->f_elf_shstrings_data = 0;
+    ep->f_elf_shstrings_length = 0;
+    ep->f_elf_shstrings_max = 0;
+    ep->f_elf_shstrings_index = 0;
+    ep->f_symtab_sect_strings = 0;
+    ep->f_symtab_sect_strings_max = 0;
+    ep->f_symtab_sect_strings_sect_index = 0;
+
+    free(ep->f_dynsym_sect_strings);
+    ep->f_dynsym_sect_strings = 0;
+    free(ep->f_dynamic);
+    ep->f_dynamic = 0;
+    free(ep->f_symtab);
+    ep->f_symtab = 0;
+    free(ep->f_dynsym);
+    ep->f_dynsym = 0;
+    free(ep->f_shdr);
+    ep->f_shdr = 0;
     /* if TRUE close f_fd on destruct.*/
     if (ep->f_destruct_close_fd) {
         _dwarf_closer(ep->f_fd);
     }
     ep->f_ident[0] = 'X';
     free(ep->f_path);
+    ep->f_path = 0;
     free(ep);
+    ep = 0;
     free(aip);
+    aip = 0;
 }
 
 int
@@ -611,6 +943,7 @@ _dwarf_elf_nlsetup(int fd,
     intfc = binary_interface->ai_object;
     intfc->f_path = strdup(true_path);
     (*dbg)->de_obj_machine = intfc->f_machine;
+    (*dbg)->de_obj_type = intfc->f_ftype; /* ET_REL etc */
     (*dbg)->de_obj_flags = intfc->f_flags;
     return res;
 }
@@ -626,7 +959,13 @@ static Dwarf_Obj_Access_Methods_a const elf_nlmethods = {
     elf_get_nolibelf_file_size,
     elf_get_nolibelf_section_count,
     elf_load_nolibelf_section,
-    elf_relocations_nolibelf
+    elf_relocations_nolibelf,
+#ifdef HAVE_FULL_MMAP
+    elf_load_nolibelf_section_a,
+#else
+    0 /* Not allowing mmap */,
+#endif
+    _dwarf_destruct_elf_nlaccess
 };
 
 /*  On any error this frees internals argument. */
@@ -688,7 +1027,7 @@ _dwarf_elf_object_access_internals_init(
     if (res != DW_DLV_OK) {
         localdoas->ai_object = intfc;
         localdoas->ai_methods = 0;
-        _dwarf_destruct_elf_nlaccess(localdoas);
+        _dwarf_destruct_elf_nlaccess((void *)localdoas);
         localdoas = 0;
         return res;
     }
@@ -697,16 +1036,17 @@ _dwarf_elf_object_access_internals_init(
     if (res != DW_DLV_OK) {
         localdoas->ai_object = intfc;
         localdoas->ai_methods = 0;
-        _dwarf_destruct_elf_nlaccess(localdoas);
+        _dwarf_destruct_elf_nlaccess((void *)localdoas);
         localdoas = 0;
         return res;
+
     }
     /* We are not looking at symbol strings for now. */
     res = _dwarf_load_elf_symstr(intfc,errcode);
     if (res == DW_DLV_ERROR) {
         localdoas->ai_object = intfc;
         localdoas->ai_methods = 0;
-        _dwarf_destruct_elf_nlaccess(localdoas);
+        _dwarf_destruct_elf_nlaccess((void *)localdoas);
         localdoas = 0;
         return res;
     }
@@ -714,7 +1054,7 @@ _dwarf_elf_object_access_internals_init(
     if (res == DW_DLV_ERROR) {
         localdoas->ai_object = intfc;
         localdoas->ai_methods = 0;
-        _dwarf_destruct_elf_nlaccess(localdoas);
+        _dwarf_destruct_elf_nlaccess((void *)localdoas);
         localdoas = 0;
         return res;
     }
@@ -725,7 +1065,10 @@ _dwarf_elf_object_access_internals_init(
 
         shp = intfc->f_shdr +i;
         section_type = shp->gh_type;
-        if (!shp->gh_namestring) {
+        /*  An empty namestring is a suggestion
+            of corrupt Elf, and useless PE/Mach-o
+            10 May 2026. */
+        if (!shp->gh_namestring || !shp->gh_namestring[0]) {
             /*  A serious error which we ignore here
                 as it will be caught elsewhere
                 if necessary. */
@@ -750,7 +1093,7 @@ _dwarf_elf_object_access_internals_init(
         if (res == DW_DLV_ERROR) {
             localdoas->ai_object = intfc;
             localdoas->ai_methods = 0;
-            _dwarf_destruct_elf_nlaccess(localdoas);
+            _dwarf_destruct_elf_nlaccess((void *)localdoas);
             localdoas = 0;
             return res;
         }
@@ -797,6 +1140,8 @@ _dwarf_elf_object_access_init(
         *localerrnum = DW_DLE_ALLOC_FAIL;
         return DW_DLV_ERROR;
     }
+    memset(intfc,0,sizeof(*intfc));
+
     /* Initialize the interface struct */
     intfc->ai_object = internals;
     intfc->ai_methods = &elf_nlmethods;

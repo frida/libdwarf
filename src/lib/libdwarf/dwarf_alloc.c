@@ -34,8 +34,12 @@
 #include <config.h>
 
 #include <stdio.h>  /* fclose() */
-#include <stdlib.h> /* malloc() free() */
+#include <stdlib.h> /* malloc() free() getenv() */
 #include <string.h> /* memset() */
+#if HAVE_FULL_MMAP
+#include <unistd.h> /* sysconf() */
+#include <sys/mman.h> /* mmap() munmap() */
+#endif
 
 #if defined(_WIN32) && defined(HAVE_STDAFX_H)
 #include "stdafx.h"
@@ -53,6 +57,7 @@
 #include "dwarf_opaque.h"
 #include "dwarf_error.h"
 #include "dwarf_alloc.h"
+#include "dwarf_safe_arithmetic.h"
 /*  These files are included to get the sizes
     of structs for malloc.
 */
@@ -367,7 +372,8 @@ struct ial_s alloc_instance_basics[ALLOC_AREA_INDEX_TABLE_MAX] = {
         _dwarf_frame_instr_destructor} ,
 
     /* 0x14  20 DW_DLA_CIE */
-    {sizeof(struct Dwarf_Cie_s),MULTIPLY_NO,  0, 0},
+    {sizeof(struct Dwarf_Cie_s),MULTIPLY_NO,  0,
+        _dwarf_cie_destructor},
 
     /* 0x15 DW_DLA_FDE */
     {sizeof(struct Dwarf_Fde_s),MULTIPLY_NO,  0,
@@ -516,8 +522,7 @@ struct ial_s alloc_instance_basics[ALLOC_AREA_INDEX_TABLE_MAX] = {
 
     /* 0x3c 60 DW_DLA_MACRO_CONTEXT */
     {sizeof(struct Dwarf_Macro_Context_s),MULTIPLY_NO,
-        _dwarf_macro_constructor,
-        _dwarf_macro_destructor},
+        _dwarf_macro_constructor,0},
 
     /* 0x3d 61 DW_DLA_CHAIN_2 */
     {sizeof(struct Dwarf_Chain_o),MULTIPLY_NO, 0, 0},
@@ -657,15 +662,55 @@ _dwarf_get_alloc(Dwarf_Debug dbg,
         /* Usually count is 1, but do not assume it. */
         size = basesize;
     } else if (action == MULTIPLY_CT) {
-        size = basesize * count;
+        int result = 0;
+        result = _dwarf_uint64_mult(basesize,count,&size);
+        if (result == DW_DLV_ERROR) {
+#if DEBUG_ALLOC
+            printf("libdwarfdetector ALLOC count*basesize  "
+                "overflowed. Return NULL. Type 0x%x "
+                "size %lu line %d %s\n",
+                (unsigned)alloc_type,(unsigned long)size,
+                __LINE__,__FILE__);
+            fflush(stdout);
+#endif /* DEBUG_ALLOC */
+            return NULL;
+        }
     }  else {
         /* MULTIPLY_SP */
         /* DW_DLA_ADDR.. count * largest size */
-        size = count *
+        int result = 0;
+        Dwarf_Unsigned greater_addr_offset = 0;
+        greater_addr_offset =
             (sizeof(Dwarf_Addr) > sizeof(Dwarf_Off) ?
             sizeof(Dwarf_Addr) : sizeof(Dwarf_Off));
+        result = _dwarf_uint64_mult(greater_addr_offset,count,&size);
+        if (result == DW_DLV_ERROR) {
+#if DEBUG_ALLOC
+            printf("libdwarfdetector ALLOC count*(addr or offset) "
+                "overflowed. Return NULL. Type 0x%x "
+                "size %lu line %d %s\n",
+                (unsigned)alloc_type,(unsigned long)size,
+                __LINE__,__FILE__);
+            fflush(stdout);
+#endif /* DEBUG_ALLOC */
+            return NULL;
+        }
     }
-    size += DW_RESERVE;
+    {
+        Dwarf_Unsigned localsize = size+DW_RESERVE;
+        if (localsize < size || localsize < DW_RESERVE) {
+#if DEBUG_ALLOC
+            printf("libdwarfdetector ALLOC size+DW_RESERVE "
+                "overflowed. Return NULL. Type 0x%x "
+                "size %lu line %d %s\n",
+                (unsigned)alloc_type,(unsigned long)localsize,
+                __LINE__,__FILE__);
+            fflush(stdout);
+#endif /* DEBUG_ALLOC */
+            return NULL;
+        }
+        size = localsize;
+    }
     alloc_mem = malloc(size);
     if (!alloc_mem) {
         return NULL;
@@ -691,15 +736,17 @@ _dwarf_get_alloc(Dwarf_Debug dbg,
                     _dwarf_find_memory when
                     constructor fails. */
 #if DEBUG_ALLOC
-    printf("libdwarfdetector ALLOC constructor fails ret NULL "
-        "type 0x%x size %lu line %d %s\n",
-        (unsigned)alloc_type,(unsigned long)size,__LINE__,__FILE__);
-    fflush(stdout);
+                printf("libdwarfdetector ALLOC constructor fails. "
+                    "return NULL. "
+                    "Type 0x%x size %lu line %d %s\n",
+                    (unsigned)alloc_type,
+                    (unsigned long)size,__LINE__,__FILE__);
+                fflush(stdout);
 #endif /* DEBUG_ALLOC */
                 return NULL;
             }
         }
-        /*  See global flag.
+        /*  See global flag global_de_alloc_tree_on.
             If zero then caller chooses not
             to track allocations, so dwarf_finish()
             is unable to free anything the caller
@@ -717,7 +764,7 @@ _dwarf_get_alloc(Dwarf_Debug dbg,
             }
         }
 #if DEBUG_ALLOC
-        printf("\nlibdwarfdetector ALLOC ret 0x%lx type 0x%x "
+        printf("\nlibdwarfdetector ALLOC. Return 0x%lx type 0x%x "
             "size %lu line %d %s\n",
             (unsigned long)ret_mem,(unsigned)alloc_type,
             (unsigned long)size,__LINE__,__FILE__);
@@ -763,6 +810,106 @@ string_is_in_debug_section(Dwarf_Debug dbg,void * space)
         part of .debug_info or any other dwarf section,
         but is space malloc-d in _dwarf_get_alloc(). */
     return FALSE;
+}
+
+static enum Dwarf_Sec_Alloc_Pref _dwarf_global_load_preference =
+    Dwarf_Alloc_Malloc;
+
+/*  If zero passed in this just returns the current
+    global preference, setting nothing */
+enum Dwarf_Sec_Alloc_Pref
+dwarf_set_load_preference(
+    enum Dwarf_Sec_Alloc_Pref dw_load_preference)
+{
+    enum Dwarf_Sec_Alloc_Pref prev_load_pref =
+        _dwarf_global_load_preference;
+#ifdef HAVE_FULL_MMAP
+    /*  Only set the preference if MMAP is available. */
+    switch(dw_load_preference) {
+    case  Dwarf_Alloc_Malloc:
+    case  Dwarf_Alloc_Mmap:
+        _dwarf_global_load_preference = dw_load_preference;
+        break;
+    case  Dwarf_Alloc_None:
+        break; /* ignore */
+    default: break;
+    }
+#else
+    (void)dw_load_preference;
+#endif
+    return prev_load_pref;
+}
+int
+dwarf_get_mmap_count(Dwarf_Debug dbg,
+    Dwarf_Unsigned *dw_mmap_count,
+    Dwarf_Unsigned *dw_mmap_size,
+    Dwarf_Unsigned *dw_malloc_count,
+    Dwarf_Unsigned *dw_malloc_size)
+{
+    unsigned long  total_entries =
+        dbg->de_debug_sections_total_entries;
+    unsigned  long i = 0;
+    Dwarf_Unsigned mma_count = 0;
+    Dwarf_Unsigned mma_size = 0;
+    Dwarf_Unsigned mal_count = 0;
+    Dwarf_Unsigned mal_size = 0;
+
+    for ( ; i < total_entries; ++i) {
+        struct Dwarf_Section_s *sec =
+            dbg->de_debug_sections[i].ds_secdata;
+
+        if (!sec->dss_size) {
+            continue;
+        }
+        switch(sec->dss_actual_load_type) {
+        case  Dwarf_Alloc_Malloc:
+            mal_count++;
+            mal_size += sec->dss_size;
+            break;
+        case  Dwarf_Alloc_Mmap:
+            mma_count++;
+            mma_size += sec->dss_size;
+            break;
+        case  Dwarf_Alloc_None:
+        default:
+            break;
+        }
+    }
+    if (dw_mmap_count) {
+        *dw_mmap_count = mma_count;
+    }
+    if (dw_mmap_size) {
+        *dw_mmap_size = mma_size;
+    }
+    if (dw_malloc_count) {
+        *dw_malloc_count = mal_count;
+    }
+    if (dw_malloc_size) {
+        *dw_malloc_size = mal_size;
+    }
+    return DW_DLV_OK;
+}
+
+enum Dwarf_Sec_Alloc_Pref
+_dwarf_determine_section_allocation_type(void)
+{
+#ifndef HAVE_FULL_MMAP
+    return _dwarf_global_load_preference;
+#else
+    char *whichalloc = getenv("DWARF_WHICH_ALLOC");
+
+    if (whichalloc) {
+        if (!strcmp(whichalloc,"mmap")) {
+            dwarf_set_load_preference(Dwarf_Alloc_Mmap);
+            return Dwarf_Alloc_Mmap;
+        }
+        if (!strcmp(whichalloc,"malloc")) {
+            dwarf_set_load_preference(Dwarf_Alloc_Malloc);
+            return Dwarf_Alloc_Malloc;
+        }
+    }
+    return _dwarf_global_load_preference;
+#endif /* HAVE_FULL_MMAP */
 }
 
 /*  These wrappers for dwarf_dealloc enable type-checking
@@ -1053,11 +1200,17 @@ _dwarf_get_debug(Dwarf_Unsigned filesize)
     /* Set up for a dwarf_tsearch hash table */
     dbg->de_magic = DBG_IS_VALID;
 
+    /*  See also dwarf_tsearchhash.c the prime number
+        table 'primes[]'. */
+#define INIT_HASH_INIT_LIMIT 2000000
     if (global_de_alloc_tree_on) {
         /*  The type of the dwarf_initialize_search_hash
             initial-size argument */
         unsigned long size_est = (unsigned long)(filesize/30);
 
+        if (size_est > INIT_HASH_INIT_LIMIT) {
+            size_est = INIT_HASH_INIT_LIMIT;
+        }
 #ifdef TESTINGHASHTAB
         printf("debugging: src filesize %lu hashtab init %lu\n",
             (unsigned long)filesize,size_est);
@@ -1071,15 +1224,45 @@ _dwarf_get_debug(Dwarf_Unsigned filesize)
 /*  In the 'rela' relocation case  or in case
     of compressed sections we might have malloc'd
     space (to ensure it is read-write or to decompress it
-    respectively, or both). In that case, free the space.  */
-static void
-malloc_section_free(struct Dwarf_Section_s * sec)
+    respectively, or both). In that case, free the space.
+    */
+void
+_dwarf_malloc_section_free(struct Dwarf_Section_s * sec)
 {
-    if (sec->dss_data_was_malloc) {
-        free(sec->dss_data);
+    /*  Compressed sections will be malloc not mmap
+        by the time we get here.
+        No matter what the preference was.  */
+    switch(sec->dss_actual_load_type) {
+    case Dwarf_Alloc_Malloc:
+        if (sec->dss_was_alloc) {
+            free(sec->dss_data);
+        }
+        break;
+    case Dwarf_Alloc_Mmap:
+#ifdef HAVE_FULL_MMAP
+        if (sec->dss_was_alloc) {
+            int res = munmap(sec->dss_mmap_realarea,
+                sec->dss_computed_mmap_len);
+#ifdef DEBUG_ALLOC
+            if (res) {
+                printf("FAILED to munmap!\n");
+                fflush(stdout);
+            }
+#endif /* DEBUG_ALLOC */
+            (void)res; /* To avoid compiler warning. */
+        }
+#endif /* HAVE_FULL_MMAP */
+        break;
+    case Dwarf_Alloc_None:
+    default:
+    break;
     }
     sec->dss_data = 0;
-    sec->dss_data_was_malloc = 0;
+    /* sec->dss_size = 0; */
+    sec->dss_was_alloc = FALSE;
+    sec->dss_mmap_realarea = 0;
+    sec->dss_computed_mmap_len = 0;
+    sec->dss_computed_mmap_offset = 0;
 }
 
 static void
@@ -1145,36 +1328,36 @@ _dwarf_free_all_of_one_debug(Dwarf_Debug dbg)
     freecontextlist(dbg,&dbg->de_info_reading);
     freecontextlist(dbg,&dbg->de_types_reading);
     /* Housecleaning done. Now really free all the space. */
-    malloc_section_free(&dbg->de_debug_info);
-    malloc_section_free(&dbg->de_debug_types);
-    malloc_section_free(&dbg->de_debug_abbrev);
-    malloc_section_free(&dbg->de_debug_line);
-    malloc_section_free(&dbg->de_debug_line_str);
-    malloc_section_free(&dbg->de_debug_loc);
-    malloc_section_free(&dbg->de_debug_aranges);
-    malloc_section_free(&dbg->de_debug_macinfo);
-    malloc_section_free(&dbg->de_debug_macro);
-    malloc_section_free(&dbg->de_debug_names);
-    malloc_section_free(&dbg->de_debug_pubnames);
-    malloc_section_free(&dbg->de_debug_str);
-    malloc_section_free(&dbg->de_debug_sup);
-    malloc_section_free(&dbg->de_debug_frame);
-    malloc_section_free(&dbg->de_debug_frame_eh_gnu);
-    malloc_section_free(&dbg->de_debug_pubtypes);
-    malloc_section_free(&dbg->de_debug_funcnames);
-    malloc_section_free(&dbg->de_debug_typenames);
-    malloc_section_free(&dbg->de_debug_varnames);
-    malloc_section_free(&dbg->de_debug_weaknames);
-    malloc_section_free(&dbg->de_debug_ranges);
-    malloc_section_free(&dbg->de_debug_str_offsets);
-    malloc_section_free(&dbg->de_debug_addr);
-    malloc_section_free(&dbg->de_debug_gdbindex);
-    malloc_section_free(&dbg->de_debug_cu_index);
-    malloc_section_free(&dbg->de_debug_tu_index);
-    malloc_section_free(&dbg->de_debug_loclists);
-    malloc_section_free(&dbg->de_debug_rnglists);
-    malloc_section_free(&dbg->de_gnu_debuglink);
-    malloc_section_free(&dbg->de_note_gnu_buildid);
+    _dwarf_malloc_section_free(&dbg->de_debug_info);
+    _dwarf_malloc_section_free(&dbg->de_debug_types);
+    _dwarf_malloc_section_free(&dbg->de_debug_abbrev);
+    _dwarf_malloc_section_free(&dbg->de_debug_line);
+    _dwarf_malloc_section_free(&dbg->de_debug_line_str);
+    _dwarf_malloc_section_free(&dbg->de_debug_loc);
+    _dwarf_malloc_section_free(&dbg->de_debug_aranges);
+    _dwarf_malloc_section_free(&dbg->de_debug_macinfo);
+    _dwarf_malloc_section_free(&dbg->de_debug_macro);
+    _dwarf_malloc_section_free(&dbg->de_debug_names);
+    _dwarf_malloc_section_free(&dbg->de_debug_pubnames);
+    _dwarf_malloc_section_free(&dbg->de_debug_str);
+    _dwarf_malloc_section_free(&dbg->de_debug_sup);
+    _dwarf_malloc_section_free(&dbg->de_debug_frame);
+    _dwarf_malloc_section_free(&dbg->de_debug_frame_eh_gnu);
+    _dwarf_malloc_section_free(&dbg->de_debug_pubtypes);
+    _dwarf_malloc_section_free(&dbg->de_debug_funcnames);
+    _dwarf_malloc_section_free(&dbg->de_debug_typenames);
+    _dwarf_malloc_section_free(&dbg->de_debug_varnames);
+    _dwarf_malloc_section_free(&dbg->de_debug_weaknames);
+    _dwarf_malloc_section_free(&dbg->de_debug_ranges);
+    _dwarf_malloc_section_free(&dbg->de_debug_str_offsets);
+    _dwarf_malloc_section_free(&dbg->de_debug_addr);
+    _dwarf_malloc_section_free(&dbg->de_debug_gdbindex);
+    _dwarf_malloc_section_free(&dbg->de_debug_cu_index);
+    _dwarf_malloc_section_free(&dbg->de_debug_tu_index);
+    _dwarf_malloc_section_free(&dbg->de_debug_loclists);
+    _dwarf_malloc_section_free(&dbg->de_debug_rnglists);
+    _dwarf_malloc_section_free(&dbg->de_gnu_debuglink);
+    _dwarf_malloc_section_free(&dbg->de_note_gnu_buildid);
     _dwarf_harmless_cleanout(&dbg->de_harmless_errors);
 
     _dwarf_dealloc_rnglists_context(dbg);
@@ -1183,7 +1366,6 @@ _dwarf_free_all_of_one_debug(Dwarf_Debug dbg)
         !dbg->de_printf_callback.dp_buffer_user_provided ) {
         free(dbg->de_printf_callback.dp_buffer);
     }
-
     _dwarf_destroy_group_map(dbg);
     /*  de_alloc_tree might be NULL if
         global_de_alloc_tree_on is zero. */

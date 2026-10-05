@@ -358,7 +358,13 @@ read_single_lle_entry(Dwarf_Debug dbg,
 /*  Reads the header. Determines the
     various offsets, including offset
     of the next header. Does no memory
-    allocations here. */
+    allocations here.
+    buildhere->lc_offset_value_array is malloced
+    and used here but
+    not elsewhere, so here we free that
+    here before returning to avoid a leak.
+    As in dwarf_rnglists.c
+*/
 int
 _dwarf_internal_read_loclists_header(Dwarf_Debug dbg,
     Dwarf_Bool build_offset_array,
@@ -501,6 +507,8 @@ _dwarf_internal_read_loclists_header(Dwarf_Debug dbg,
         }
     } /* else no offset table */
 
+    free(buildhere->lc_offset_value_array);
+    buildhere->lc_offset_value_array = 0;
     buildhere->lc_offsets_off_in_sect = offset+localoff;
     buildhere->lc_first_loclist_offset =
         buildhere->lc_offsets_off_in_sect + lists_len;
@@ -966,8 +974,6 @@ _dwarf_which_loclists_context(Dwarf_Debug dbg,
     Dwarf_Unsigned          rcxoff = 0;
     Dwarf_Unsigned          rcxend = 0;
     Dwarf_Unsigned          loclists_base = 0;
-    Dwarf_Bool              loclists_base_present = FALSE;
-    int                     res = 0;
     Dwarf_Bool              found_base = FALSE;
     Dwarf_Unsigned          chosen_offset = 0;
 
@@ -982,12 +988,18 @@ _dwarf_which_loclists_context(Dwarf_Debug dbg,
     }
 
     if (ctx->cc_loclists_base_present) {
-        loclists_base_present = ctx->cc_loclists_base_present;
         loclists_base = ctx->cc_loclists_base;
         found_base = TRUE;
         chosen_offset = loclists_base;
     }
+#if 0  /* Do not do this, ignore fission section */
     if (!found_base) {
+        Dwarf_Bool              loclists_base_present = FALSE;
+        int                     res = 0;
+        /*  This works for CU access, but fails for TU access
+            as for .debug_tu_index there is no whole-type-unit
+            entry in any .debug_tu_index section.
+            DWARF5 Sec 7.3.5 Page 190. */
         res = _dwarf_has_SECT_fission(ctx,
             DW_SECT_LOCLISTS,
             &loclists_base_present,&loclists_base);
@@ -996,6 +1008,7 @@ _dwarf_which_loclists_context(Dwarf_Debug dbg,
             chosen_offset = loclists_base;
         }
     }
+#endif
     if (!found_base) {
         loclists_base = loclist_offset;
         chosen_offset = loclist_offset;
@@ -1187,7 +1200,7 @@ build_array_of_lle(Dwarf_Debug dbg,
     return DW_DLV_OK;
 }
 
-/*  Build a head with all the relevent Entries
+/*  Build a head with all the relevant Entries
     attached, all the locdescs and for each such,
     all its expression operators.
 */
@@ -1282,6 +1295,21 @@ _dwarf_loclists_fill_in_lle_head(Dwarf_Debug dbg,
         if (res == DW_DLV_OK) {
             /* FALL THROUGH */
         } else if (res == DW_DLV_NO_ENTRY) {
+            /*  The following is only needed by a project
+                reading an object file  with bad relocations
+                and opening the DWARF via
+                dwarf_object_init_b(), meaning the user
+                object reader is taking all responsibility
+                for object checking while not doing
+                enough checking.  So this is a special
+                accommodation for the specific user code and
+                we cannot guarantee this suffices. */
+            if (!array) {
+                _dwarf_error_string(dbg,error,DW_DLE_LOCLISTS_ERROR,
+                    "DW_DLE_LOCLISTS_ERROR: "
+                    "no .debug_loclists context available");
+                return DW_DLV_ERROR;
+            }
             loclists_contextnum = 0;
             /* FALL THROUGH */
         } else {

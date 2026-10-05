@@ -67,7 +67,7 @@ print_debug_loclists_linecodes(Dwarf_Bool checking,
     Dwarf_Bool   * bError)
 {
     /*  Once most committed FIXME remove this and let
-        lenght print */
+        length print */
     (void)lle_byte_count;
     if (debug_addr_unavailable) {
         *bError = TRUE;
@@ -123,8 +123,7 @@ print_debug_loclists_linecodes(Dwarf_Bool checking,
             ">",hipc);
         if (checking && !debug_addr_unavailable) {
             loc_error_check(tagname,attrname,
-                lopc, rawlopc,
-                hipc, rawhipc, locdesc_offset, base_address,
+                lopc, hipc, locdesc_offset, base_address,
                 bError);
         }
         break;
@@ -160,13 +159,12 @@ print_debug_loclists_linecodes(Dwarf_Bool checking,
         }
         if (checking && !debug_addr_unavailable) {
             loc_error_check(tagname,attrname,
-                lopc, rawlopc,
-                hipc, rawhipc, locdesc_offset, base_address,
+                lopc, hipc, locdesc_offset, base_address,
                 bError);
         }
         break;
     case  DW_LLE_offset_pair:
-        /*  debug_addr_unavailable does apply becase
+        /*  debug_addr_unavailable does apply because
             that might cause base address to be invalid. */
         if (debug_addr_unavailable) {
             esb_append_printf_u(esbp,
@@ -199,8 +197,7 @@ print_debug_loclists_linecodes(Dwarf_Bool checking,
         }
         if (checking && !debug_addr_unavailable) {
             loc_error_check(tagname,attrname,
-                lopc, rawlopc,
-                hipc, rawhipc, locdesc_offset, base_address,
+                lopc, hipc, locdesc_offset, base_address,
                 bError);
         }
         break;
@@ -215,8 +212,7 @@ print_debug_loclists_linecodes(Dwarf_Bool checking,
             ">",hipc);
         if (checking && !debug_addr_unavailable) {
             loc_error_check(tagname,attrname,
-                lopc, rawlopc,
-                hipc, rawhipc, locdesc_offset, base_address,
+                lopc, hipc, locdesc_offset, base_address,
                 bError);
         }
         break;
@@ -252,8 +248,7 @@ print_debug_loclists_linecodes(Dwarf_Bool checking,
         }
         if (checking && !debug_addr_unavailable) {
             loc_error_check(tagname,attrname,
-                lopc, rawlopc,
-                hipc, rawhipc, locdesc_offset, base_address,
+                lopc, hipc, locdesc_offset, base_address,
                 bError);
         }
         break;
@@ -271,7 +266,7 @@ print_debug_loclists_linecodes(Dwarf_Bool checking,
         }
         break;
     }
-#if 0
+#if 0 /* Would probably be wasteful ? */
     esb_append_printf_u(esbp," length: %u",lle_byte_count);
 #endif
     return DW_DLV_OK;

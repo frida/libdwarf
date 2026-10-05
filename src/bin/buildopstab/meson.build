@@ -1,7 +1,7 @@
 
 localinclude = include_directories('../dwarfdump')
 
-buildopstab_args = []
+buildopstab_args = [ '-I.' ]
 
 if (lib_type == 'static')
   buildopstab_args += ['-DLIBDWARF_STATIC']

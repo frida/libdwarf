@@ -77,47 +77,6 @@ freeall_groups_tables(void)
 
 #define TRUE 1
 #define FALSE 0
-#if 0
-static struct  glfsetting_s {
-    const char *secname;
-    Dwarf_Bool *flag;
-    Dwarf_Bool origset;
-    Dwarf_Bool origflag;
-} glftab[] = {
-{".debug_abbrev",       &glflags.gf_abbrev_flag,FALSE,FALSE},
-{".debug_aranges",      &glflags.gf_aranges_flag,FALSE,FALSE},
-{".debug_debug_macinfo",&glflags.gf_macinfo_flag,FALSE,FALSE},
-{".debug_debug_macro",  &glflags.gf_macro_flag,FALSE,FALSE},
-{".debug_debug_names",  &glflags.gf_debug_names_flag,FALSE,FALSE},
-{".debug_eh_frame",     &glflags.gf_eh_frame_flag,FALSE,FALSE},
-{".debug_frame",        &glflags.gf_frame_flag,FALSE,FALSE},
-{".gdb_index",          &glflags.gf_gdbindex_flag,FALSE,FALSE},
-{".debug_info",         &glflags.gf_info_flag,FALSE,FALSE},
-{".debug_line",         &glflags.gf_line_flag,FALSE,FALSE},
-{".debug_loc",          &glflags.gf_loc_flag,FALSE,FALSE},
-/*{".debug_loclists",     &glflags.gf_loclists_flag,FALSE,FALSE}, */
-{".debug_pubnames",     &glflags.gf_pubnames_flag,FALSE,FALSE},
-
-/* SGI only */
-{".debug_pubtypes",     &glflags.gf_pubtypes_flag,FALSE,FALSE},
-
-{".debug_ranges",       &glflags.gf_ranges_flag,FALSE,FALSE},
-/*{".debug_rnglists",     &glflags.gf_rnglists_flag,FALSE,FALSE}, */
-
-/* SGI only */
-{".debug_static_func",  &glflags.gf_static_func_flag,FALSE,FALSE},
-
-/* SGI only */
-{".debug_static_var",   &glflags.gf_static_var_flag,FALSE,FALSE},
-
-{".debug_str",          &glflags.gf_string_flag,FALSE,FALSE},
-{".debug_types",        &glflags.gf_types_flag,FALSE,FALSE},
-
-/* SGI only */
-{".debug_weaknames",    &glflags.gf_weakname_flag,FALSE,FALSE},
-{0,0,0,0}
-};
-#endif /* 0 */
 
 /*  If a section is not in group N but is in group 1
     then turn off its flag. Since sections are never
@@ -130,31 +89,7 @@ static struct  glfsetting_s {
     FIXME: It would be good if, for a wholly missing
     section related to a flag, that the flag got turned
     off.  */
-#if 0
-static void
-turn_off_subsidiary_flags(void)
-{
-    Dwarf_Unsigned i = 0;
 
-    for ( ; i < group_map_entry_count; ++i) {
-        if (group_nums[i] == 1) {
-            unsigned k = 0;
-            const char* oursec = sec_names[i];
-
-            for ( ; glftab[k].secname; ++k ) {
-                if (!strcmp(oursec,glftab[k].secname)) {
-                    if (!glftab[k].origset) {
-                        glftab[k].origset = TRUE;
-                        glftab[k].origflag = *(glftab[k].flag);
-                    }
-                    *(glftab[k].flag) = FALSE;
-                }
-            }
-        }
-    }
-}
-
-#endif
 /*  Restoring original condition in the glftab array
     and in the global flags it points to.
     So that when processing an archive one can restore
@@ -165,21 +100,8 @@ turn_off_subsidiary_flags(void)
 void
 groups_restore_subsidiary_flags(void)
 {
-#if 0
-    unsigned k = 0;
-#endif
-
     /*  Duplicative but harmless free. */
     freeall_groups_tables();
-#if 0
-    for ( ; glftab[k].secname; ++k ) {
-        if (glftab[k].origset) {
-            *(glftab[k].flag) = glftab[k].origflag;
-            glftab[k].origset = FALSE;
-            glftab[k].origflag = FALSE;
-        }
-    }
-#endif
 }
 
 /*  NEW May 2017.
@@ -210,9 +132,6 @@ update_section_flags_per_groups(void)
         freeall_groups_tables();
         return;
     }
-#if 0
-    turn_off_subsidiary_flags();
-#endif
     freeall_groups_tables();
 }
 

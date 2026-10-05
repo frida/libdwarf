@@ -1,5 +1,5 @@
 /* Generated routines, do not edit. */
-/* Generated for source version 0.11.2 */
+/* Generated for source version 2.3.4 */
 
 /* BEGIN FILE */
 
@@ -944,6 +944,12 @@ dwarf_get_AT_name (unsigned int val,
     case DW_AT_loclists_base:
         *s_out = "DW_AT_loclists_base";
         return DW_DLV_OK;
+    case DW_AT_language_name:
+        *s_out = "DW_AT_language_name";
+        return DW_DLV_OK;
+    case DW_AT_language_version:
+        *s_out = "DW_AT_language_version";
+        return DW_DLV_OK;
     case DW_AT_ghs_namespace_alias:
         *s_out = "DW_AT_ghs_namespace_alias";
         return DW_DLV_OK;
@@ -973,6 +979,8 @@ dwarf_get_AT_name (unsigned int val,
         *s_out = "DW_AT_MIPS_loop_begin";
         return DW_DLV_OK;
     /*  Skipping alternate spelling of value
+        0x2002. DW_AT_TI_max_frame_size */
+    /*  Skipping alternate spelling of value
         0x2002. DW_AT_CPQ_semantic_events */
     case DW_AT_MIPS_tail_loop_begin:
         *s_out = "DW_AT_MIPS_tail_loop_begin";
@@ -983,10 +991,14 @@ dwarf_get_AT_name (unsigned int val,
         *s_out = "DW_AT_MIPS_epilog_begin";
         return DW_DLV_OK;
     /*  Skipping alternate spelling of value
+        0x2004. DW_AT_TI_asm_line */
+    /*  Skipping alternate spelling of value
         0x2004. DW_AT_CPQ_split_lifetimes_rtn */
     case DW_AT_MIPS_loop_unroll_factor:
         *s_out = "DW_AT_MIPS_loop_unroll_factor";
         return DW_DLV_OK;
+    /*  Skipping alternate spelling of value
+        0x2005. DW_AT_TI_begin_file */
     /*  Skipping alternate spelling of value
         0x2005. DW_AT_HP_prologue */
     /*  Skipping alternate spelling of value
@@ -994,22 +1006,32 @@ dwarf_get_AT_name (unsigned int val,
     case DW_AT_MIPS_software_pipeline_depth:
         *s_out = "DW_AT_MIPS_software_pipeline_depth";
         return DW_DLV_OK;
+    /*  Skipping alternate spelling of value
+        0x2006. DW_AT_TI_end_file */
     case DW_AT_MIPS_linkage_name:
         *s_out = "DW_AT_MIPS_linkage_name";
         return DW_DLV_OK;
+    /*  Skipping alternate spelling of value
+        0x2007. DW_AT_TI_begin_line */
     /*  Skipping alternate spelling of value
         0x2007. DW_AT_ghs_mangled */
     case DW_AT_MIPS_stride:
         *s_out = "DW_AT_MIPS_stride";
         return DW_DLV_OK;
     /*  Skipping alternate spelling of value
+        0x2008. DW_AT_TI_end_line */
+    /*  Skipping alternate spelling of value
         0x2008. DW_AT_HP_epilogue */
     case DW_AT_MIPS_abstract_name:
         *s_out = "DW_AT_MIPS_abstract_name";
         return DW_DLV_OK;
+    /*  Skipping alternate spelling of value
+        0x2009. DW_AT_TI_begin_column */
     case DW_AT_MIPS_clone_origin:
         *s_out = "DW_AT_MIPS_clone_origin";
         return DW_DLV_OK;
+    /*  Skipping alternate spelling of value
+        0x200a. DW_AT_TI_end_column */
     case DW_AT_MIPS_has_inlines:
         *s_out = "DW_AT_MIPS_has_inlines";
         return DW_DLV_OK;
@@ -1389,6 +1411,15 @@ dwarf_get_AT_name (unsigned int val,
         return DW_DLV_OK;
     case DW_AT_go_runtime_type:
         *s_out = "DW_AT_go_runtime_type";
+        return DW_DLV_OK;
+    case DW_AT_go_package_name:
+        *s_out = "DW_AT_go_package_name";
+        return DW_DLV_OK;
+    case DW_AT_go_dict_index:
+        *s_out = "DW_AT_go_dict_index";
+        return DW_DLV_OK;
+    case DW_AT_go_closure_offset:
+        *s_out = "DW_AT_go_closure_offset";
         return DW_DLV_OK;
     case DW_AT_upc_threads_scaled:
         *s_out = "DW_AT_upc_threads_scaled";
@@ -2873,6 +2904,24 @@ dwarf_get_LANG_name (unsigned int val,
     case DW_LANG_SYCL:
         *s_out = "DW_LANG_SYCL";
         return DW_DLV_OK;
+    case DW_LANG_C_plus_plus_23:
+        *s_out = "DW_LANG_C_plus_plus_23";
+        return DW_DLV_OK;
+    case DW_LANG_Odin:
+        *s_out = "DW_LANG_Odin";
+        return DW_DLV_OK;
+    case DW_LANG_P4:
+        *s_out = "DW_LANG_P4";
+        return DW_DLV_OK;
+    case DW_LANG_Metal:
+        *s_out = "DW_LANG_Metal";
+        return DW_DLV_OK;
+    case DW_LANG_C23:
+        *s_out = "DW_LANG_C23";
+        return DW_DLV_OK;
+    case DW_LANG_Fortran23:
+        *s_out = "DW_LANG_Fortran23";
+        return DW_DLV_OK;
     case DW_LANG_Ruby:
         *s_out = "DW_LANG_Ruby";
         return DW_DLV_OK;
@@ -2881,6 +2930,24 @@ dwarf_get_LANG_name (unsigned int val,
         return DW_DLV_OK;
     case DW_LANG_Hylo:
         *s_out = "DW_LANG_Hylo";
+        return DW_DLV_OK;
+    case DW_LANG_V:
+        *s_out = "DW_LANG_V";
+        return DW_DLV_OK;
+    case DW_LANG_Algol68:
+        *s_out = "DW_LANG_Algol68";
+        return DW_DLV_OK;
+    case DW_LANG_NIM:
+        *s_out = "DW_LANG_NIM";
+        return DW_DLV_OK;
+    case DW_LANG_Erlang:
+        *s_out = "DW_LANG_Erlang";
+        return DW_DLV_OK;
+    case DW_LANG_Elixir:
+        *s_out = "DW_LANG_Elixir";
+        return DW_DLV_OK;
+    case DW_LANG_Gleam:
+        *s_out = "DW_LANG_Gleam";
         return DW_DLV_OK;
     case DW_LANG_lo_user:
         *s_out = "DW_LANG_lo_user";
@@ -2905,6 +2972,166 @@ dwarf_get_LANG_name (unsigned int val,
         return DW_DLV_OK;
     case DW_LANG_hi_user:
         *s_out = "DW_LANG_hi_user";
+        return DW_DLV_OK;
+    default: break;
+    }
+    return DW_DLV_NO_ENTRY;
+}
+/* ARGSUSED */
+int
+dwarf_get_LNAME_name (unsigned int val,
+    const char ** s_out)
+{
+    switch (val) {
+    case DW_LNAME_Ada:
+        *s_out = "DW_LNAME_Ada";
+        return DW_DLV_OK;
+    case DW_LNAME_BLISS:
+        *s_out = "DW_LNAME_BLISS";
+        return DW_DLV_OK;
+    case DW_LNAME_C:
+        *s_out = "DW_LNAME_C";
+        return DW_DLV_OK;
+    case DW_LNAME_C_plus_plus:
+        *s_out = "DW_LNAME_C_plus_plus";
+        return DW_DLV_OK;
+    case DW_LNAME_Cobol:
+        *s_out = "DW_LNAME_Cobol";
+        return DW_DLV_OK;
+    case DW_LNAME_Crystal:
+        *s_out = "DW_LNAME_Crystal";
+        return DW_DLV_OK;
+    case DW_LNAME_D:
+        *s_out = "DW_LNAME_D";
+        return DW_DLV_OK;
+    case DW_LNAME_Dylan:
+        *s_out = "DW_LNAME_Dylan";
+        return DW_DLV_OK;
+    case DW_LNAME_Fortran:
+        *s_out = "DW_LNAME_Fortran";
+        return DW_DLV_OK;
+    case DW_LNAME_Go:
+        *s_out = "DW_LNAME_Go";
+        return DW_DLV_OK;
+    case DW_LNAME_Haskell:
+        *s_out = "DW_LNAME_Haskell";
+        return DW_DLV_OK;
+    case DW_LNAME_Java:
+        *s_out = "DW_LNAME_Java";
+        return DW_DLV_OK;
+    case DW_LNAME_Julia:
+        *s_out = "DW_LNAME_Julia";
+        return DW_DLV_OK;
+    case DW_LNAME_Kotlin:
+        *s_out = "DW_LNAME_Kotlin";
+        return DW_DLV_OK;
+    case DW_LNAME_Modula2:
+        *s_out = "DW_LNAME_Modula2";
+        return DW_DLV_OK;
+    case DW_LNAME_Modula3:
+        *s_out = "DW_LNAME_Modula3";
+        return DW_DLV_OK;
+    case DW_LNAME_ObjC:
+        *s_out = "DW_LNAME_ObjC";
+        return DW_DLV_OK;
+    case DW_LNAME_ObjC_plus_plus:
+        *s_out = "DW_LNAME_ObjC_plus_plus";
+        return DW_DLV_OK;
+    case DW_LNAME_OCaml:
+        *s_out = "DW_LNAME_OCaml";
+        return DW_DLV_OK;
+    case DW_LNAME_OpenCL_C:
+        *s_out = "DW_LNAME_OpenCL_C";
+        return DW_DLV_OK;
+    case DW_LNAME_Pascal:
+        *s_out = "DW_LNAME_Pascal";
+        return DW_DLV_OK;
+    case DW_LNAME_PLI:
+        *s_out = "DW_LNAME_PLI";
+        return DW_DLV_OK;
+    case DW_LNAME_Python:
+        *s_out = "DW_LNAME_Python";
+        return DW_DLV_OK;
+    case DW_LNAME_RenderScript:
+        *s_out = "DW_LNAME_RenderScript";
+        return DW_DLV_OK;
+    case DW_LNAME_Rust:
+        *s_out = "DW_LNAME_Rust";
+        return DW_DLV_OK;
+    case DW_LNAME_Swift:
+        *s_out = "DW_LNAME_Swift";
+        return DW_DLV_OK;
+    case DW_LNAME_UPC:
+        *s_out = "DW_LNAME_UPC";
+        return DW_DLV_OK;
+    case DW_LNAME_Zig:
+        *s_out = "DW_LNAME_Zig";
+        return DW_DLV_OK;
+    case DW_LNAME_Assembly:
+        *s_out = "DW_LNAME_Assembly";
+        return DW_DLV_OK;
+    case DW_LNAME_C_sharp:
+        *s_out = "DW_LNAME_C_sharp";
+        return DW_DLV_OK;
+    case DW_LNAME_Mojo:
+        *s_out = "DW_LNAME_Mojo";
+        return DW_DLV_OK;
+    case DW_LNAME_GLSL:
+        *s_out = "DW_LNAME_GLSL";
+        return DW_DLV_OK;
+    case DW_LNAME_GLSL_ES:
+        *s_out = "DW_LNAME_GLSL_ES";
+        return DW_DLV_OK;
+    case DW_LNAME_HLSL:
+        *s_out = "DW_LNAME_HLSL";
+        return DW_DLV_OK;
+    case DW_LNAME_OpenCL_CPP:
+        *s_out = "DW_LNAME_OpenCL_CPP";
+        return DW_DLV_OK;
+    case DW_LNAME_CPP_for_OpenCL:
+        *s_out = "DW_LNAME_CPP_for_OpenCL";
+        return DW_DLV_OK;
+    case DW_LNAME_SYCL:
+        *s_out = "DW_LNAME_SYCL";
+        return DW_DLV_OK;
+    case DW_LNAME_Ruby:
+        *s_out = "DW_LNAME_Ruby";
+        return DW_DLV_OK;
+    case DW_LNAME_Move:
+        *s_out = "DW_LNAME_Move";
+        return DW_DLV_OK;
+    case DW_LNAME_Hylo:
+        *s_out = "DW_LNAME_Hylo";
+        return DW_DLV_OK;
+    case DW_LNAME_HIP:
+        *s_out = "DW_LNAME_HIP";
+        return DW_DLV_OK;
+    case DW_LNAME_Odin:
+        *s_out = "DW_LNAME_Odin";
+        return DW_DLV_OK;
+    case DW_LNAME_P4:
+        *s_out = "DW_LNAME_P4";
+        return DW_DLV_OK;
+    case DW_LNAME_Metal:
+        *s_out = "DW_LNAME_Metal";
+        return DW_DLV_OK;
+    case DW_LNAME_V:
+        *s_out = "DW_LNAME_V";
+        return DW_DLV_OK;
+    case DW_LNAME_Algol68:
+        *s_out = "DW_LNAME_Algol68";
+        return DW_DLV_OK;
+    case DW_LNAME_Nim:
+        *s_out = "DW_LNAME_Nim";
+        return DW_DLV_OK;
+    case DW_LNAME_Erlang:
+        *s_out = "DW_LNAME_Erlang";
+        return DW_DLV_OK;
+    case DW_LNAME_Elixir:
+        *s_out = "DW_LNAME_Elixir";
+        return DW_DLV_OK;
+    case DW_LNAME_Gleam:
+        *s_out = "DW_LNAME_Gleam";
         return DW_DLV_OK;
     default: break;
     }

@@ -1738,12 +1738,24 @@ dwarf_bitoffset(Dwarf_Die die,
     and specified in the DWARF standard*/
 int
 dwarf_srclang(Dwarf_Die die,
-    Dwarf_Unsigned *ret_size, Dwarf_Error *error)
+    Dwarf_Unsigned *ret_name, Dwarf_Error *error)
+{
+    Dwarf_Unsigned name = 0;
+    int res = _dwarf_die_attr_unsigned_constant(die, DW_AT_language,
+        &name, error);
+    *ret_name = name;
+    return res;
+}
+
+int
+dwarf_srclanglname(Dwarf_Die die,
+    Dwarf_Unsigned *ret_name, Dwarf_Error *error)
 {
     Dwarf_Unsigned luns = 0;
-    int res = _dwarf_die_attr_unsigned_constant(die, DW_AT_language,
+    int res = _dwarf_die_attr_unsigned_constant(die,
+        DW_AT_language_name,
         &luns, error);
-    *ret_size = luns;
+    *ret_name = luns;
     return res;
 }
 
@@ -1796,7 +1808,7 @@ dwarf_die_abbrev_code(Dwarf_Die die)
     return die->di_abbrev_code;
 }
 
-/*  Returns a flag through ablhas_child. Non-zero if
+/*  Returns a flag through ab_has_child. Non-zero if
     the DIE has children, zero if it does not.
     It has no Dwarf_Error arg!
 */
@@ -1840,7 +1852,7 @@ dw_get_special_offset(Dwarf_Half attrnum,
         return DW_FORM_CLASS_MACROPTR;
     case DW_AT_loclists_base: /* DWARF5 */
         return DW_FORM_CLASS_LOCLISTSPTR;
-    case DW_AT_GNU_addr_base: /* DWARF55-like */
+    case DW_AT_GNU_addr_base: /* DWARF5-like */
     case DW_AT_addr_base:     /* DWARF5 */
         return DW_FORM_CLASS_ADDRPTR;
     case DW_AT_str_offsets_base: /* DWARF5 */
@@ -1903,20 +1915,32 @@ static int
 block_means_locexpr(Dwarf_Half attr)
 {
     switch(attr) {
+    case DW_AT_allocated:
+    case DW_AT_associated:
     case DW_AT_bit_size:
     case DW_AT_byte_size:
+    case DW_AT_byte_stride:
+    case DW_AT_bit_stride:
     case DW_AT_call_data_location:
     case DW_AT_call_data_value:
+    case DW_AT_call_origin:
+    case DW_AT_call_target:
+    case DW_AT_call_target_clobbered:
     case DW_AT_call_value:
+    case DW_AT_count:
+    case DW_AT_data_location:
     case DW_AT_data_member_location:
     case DW_AT_frame_base:
     case DW_AT_GNU_call_site_target:
     case DW_AT_GNU_call_site_value:
     case DW_AT_location:
+    case DW_AT_lower_bound:
+    case DW_AT_rank:
     case DW_AT_return_addr:
     case DW_AT_segment:
     case DW_AT_static_link:
     case DW_AT_string_length:
+    case DW_AT_upper_bound:
     case DW_AT_use_location:
     case DW_AT_vtable_elem_location:
         return TRUE;
@@ -2205,11 +2229,12 @@ dwarf_get_universalbinary_count(
 
 /*  Never returns DW_DLV_ERROR */
 int
-dwarf_machine_architecture(Dwarf_Debug dbg,
+dwarf_machine_architecture_a(Dwarf_Debug dbg,
     Dwarf_Small    *dw_ftype,
     Dwarf_Small    *dw_obj_pointersize,
     Dwarf_Bool     *dw_obj_is_big_endian,
     Dwarf_Unsigned *dw_obj_machine,
+    Dwarf_Unsigned *dw_obj_type,
     Dwarf_Unsigned *dw_obj_flags,
     Dwarf_Small    *dw_path_source,
     Dwarf_Unsigned *dw_ub_offset,
@@ -2232,6 +2257,9 @@ dwarf_machine_architecture(Dwarf_Debug dbg,
     if (dw_obj_machine) {
         *dw_obj_machine = dbg->de_obj_machine;
     }
+    if (dw_obj_type) {
+        *dw_obj_type = dbg->de_obj_type;
+    }
     if (dw_obj_flags) {
         *dw_obj_flags = dbg->de_obj_flags;
     }
@@ -2251,4 +2279,36 @@ dwarf_machine_architecture(Dwarf_Debug dbg,
         *dw_comdat_groupnumber = dbg->de_groupnumber;
     }
     return DW_DLV_OK;
+}
+int
+dwarf_machine_architecture(Dwarf_Debug dbg,
+    Dwarf_Small    *dw_ftype,
+    Dwarf_Small    *dw_obj_pointersize,
+    Dwarf_Bool     *dw_obj_is_big_endian,
+    Dwarf_Unsigned *dw_obj_machine,
+    Dwarf_Unsigned *dw_obj_flags,
+    Dwarf_Small    *dw_path_source,
+    Dwarf_Unsigned *dw_ub_offset,
+    Dwarf_Unsigned *dw_ub_count,
+    Dwarf_Unsigned *dw_ub_index,
+    Dwarf_Unsigned *dw_comdat_groupnumber)
+{
+    return dwarf_machine_architecture_a(dbg,
+        dw_ftype,dw_obj_pointersize,
+        dw_obj_is_big_endian,
+        dw_obj_machine,
+        0 /* Ignoring Elf e_type */ ,
+        dw_obj_flags, dw_path_source,
+        dw_ub_offset, dw_ub_count,
+        dw_ub_index,  dw_comdat_groupnumber);
+}
+/*  OBSOLETE NAME:  Do not use dwarf_language_version_string(). */
+int dwarf_language_version_string(
+    Dwarf_Unsigned dw_lang_name,
+    int           *dw_default_lower_bound,
+    const char   **dw_version_scheme)
+{
+    return dwarf_language_version_data(dw_lang_name,
+        dw_default_lower_bound,
+        dw_version_scheme);
 }

@@ -2,9 +2,9 @@
 ###This code is public domain and can be freely used or copied.
 
 dnl defines the version name of  the libdwarf.so
-m4_define([v_maj], [0])
-m4_define([v_min], [11])
-m4_define([v_mic], [2])
+m4_define([v_maj], [2])
+m4_define([v_min], [3])
+m4_define([v_mic], [4])
 m4_define([v_ver], [v_maj.v_min.v_mic])
 
 m4_define([v_rel], [])
@@ -90,7 +90,7 @@ AC_ARG_ENABLE([wall],
 
 AC_ARG_ENABLE([doc],
    [AS_HELP_STRING([--enable-doc],
-                   [build and install Doxygen documentation @<:@default=no@:>@])],
+      [build and install Doxygen documentation @<:@default=no@:>@])],
    [
     AS_IF(
         [test "x${enableval}" = "xyes"],
@@ -98,6 +98,17 @@ AC_ARG_ENABLE([doc],
         [enable_doc="no"])
    ],
    [enable_doc="no"])
+
+AC_ARG_ENABLE([mmap],
+   [AS_HELP_STRING([--enable-mmap],
+      [build with mmap support if possible @<:@default=yes@:>@])],
+   [
+    AS_IF(
+        [test "x${enableval}" = "xno"],
+        [enable_mmap="no"],
+        [enable_mmap="yes"])
+   ],
+   [enable_mmap="yes"])
 
 ### Default options with respect to host
 
@@ -203,6 +214,43 @@ AC_ARG_VAR([DWARF_LIBS], [extra linker flags when linking dwarfdump])
 AC_CHECK_HEADERS([unistd.h sys/types.h malloc.h])
 ### for uintptr_t and open and open argument defines
 AC_CHECK_HEADERS([stdint.h inttypes.h stddef.h fcntl.h])
+AC_CHECK_HEADERS([sys/stat.h stdafx.h])
+###relevant for mmap
+have_mmap="no"
+AS_IF(  
+  [test "x${enable_mmap}" = "xyes"],
+  [
+    AC_COMPILE_IFELSE(
+    [ AC_LANG_PROGRAM(
+      [[
+      #include <unistd.h>
+      #include <string.h>
+      #include <stdlib.h>
+      #include <sys/mman.h>
+      ]],
+      [[
+        long pagesize = sysconf(_SC_PAGESIZE);
+        int fd = 4;
+        (void)pagesize;
+        mmap(0, 100,PROT_READ|PROT_WRITE,MAP_PRIVATE,
+            fd,100);
+        munmap((void *)100,100);
+      ]]
+      )
+    ],
+    [ have_mmap="yes"
+      AC_DEFINE(
+        [HAVE_FULL_MMAP], [1],
+        [Set to 1 as mmap/munmap is usable])
+      AC_DEFINE(
+        [HAVE_SYS_MMAP_H], [1],
+        [Set to 1 as sys/mmap.h is usable])
+    ],
+    [ have_mmap="no"]
+   )
+  ],
+  [ have_mmap="no"]
+)
 
 AS_IF(
     [test "x${enable_decompression}" = "xyes"],
@@ -254,7 +302,6 @@ AC_ARG_VAR([DWARF_BIGENDIAN],
 # error: 'strcmp' reading 1 or more bytes from a region of
 # size 0 [-Werror=stringop-overread]
 # !strcmp(postzprefix,targname+DPREFIXLEN)
-
 c_common_flags="-Wall -Wextra -Wpointer-arith -Wmissing-declarations -Wcomment -Wformat -Wpedantic -Wuninitialized -Wshadow -Werror -Wno-long-long"
 AS_IF(
     [ test "x$enable_wall" = "xyes" ],
@@ -364,6 +411,11 @@ AS_IF(
 AC_MSG_CHECKING([whether sanitize options are used])
 AC_MSG_RESULT([${enable_sanitize}])
 
+# if the builder specifies -std=c99 or various other
+# options linking will fail as strdup() is hidden.
+# So we do the following.
+CPPFLAGS="${CPPFLAGS} -D_GNU_SOURCE"
+
 # -fvisibility
 AS_IF(
     [test "x${enable_shared}" = "xyes" && test "x${have_win32}" = "xno"],
@@ -381,7 +433,6 @@ AS_IF(
     ])
 
 ### Checks for linker characteristics
-
 
 ### Checks for library functions
 
@@ -458,6 +509,8 @@ src/bin/tag_attr/Makefile
 src/bin/tag_tree/Makefile
 src/bin/attr_form/Makefile
 src/bin/buildopstab/Makefile
+src/bin/checkDW_LANG/Makefile
+src/bin/buildDW_LNAME/Makefile
 src/bin/builduritable/Makefile
 test/Makefile
 fuzz/Makefile
@@ -481,6 +534,7 @@ echo "  static library.......: ${enable_static}"
 echo
 echo "  zlib support.........: ${have_zlib}"
 echo "  zstd support.........: ${have_zstd}"
+echo "  mmap supported.......: ${have_mmap}"
 echo "  sanitize support.....: ${enable_sanitize}"
 echo "  documentation........: ${enable_doc}"
 echo "  BuildOS-BigEndian....: ${ac_cv_c_bigendian}"

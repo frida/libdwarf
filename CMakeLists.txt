@@ -1,13 +1,12 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.12)
 
-project(libdwarf VERSION 0.11.2 
+project(libdwarf VERSION 2.3.4 
     DESCRIPTION "Library to access DWARF debugging information" 
     HOMEPAGE_URL "https://github.com/davea42/libdwarf-code.git"
-    LANGUAGES C CXX)
+    LANGUAGES C)
 
 # libdwarf
-option(BUILD_NON_SHARED "build archive library libdwarf[p].a" TRUE)
-option(BUILD_SHARED "build shared library libdwarf[p].so and use it" FALSE)
+option(BUILD_MMAP "build library allowing mmap" TRUE)
 
 option(ENABLE_DECOMPRESSION
     "Enables support for compressed debug sections if both libz/libzstd are present"
@@ -15,12 +14,20 @@ option(ENABLE_DECOMPRESSION
 
 #  This adds compiler option -Wall (gcc compiler warnings)
 option(WALL "Add -Wall" FALSE)
-option(LIBDWARF_STATIC "add -DLIBDWARF_STATIC" FALSE)
-
+option(INSTALL_STATIC_LIBRARIES "Install the static libraries" FALSE)
 option(BUILD_DWARFDUMP "Build dwarfdump (default is YES)" TRUE)
-
 option(BUILD_DWARFGEN "Build dwarfgen (default is NO)" FALSE)
-message(STATUS "Building dwarfgen    ... ${BUILD_DWARFGEN}")
+if(BUILD_DWARFGEN)
+  include(CheckLanguage)
+  check_language(CXX)
+  if(CMAKE_CXX_COMPILER)
+    enable_language(CXX)
+  else()
+    message(STATUS "No C++ compiler available; disabling dwarfgen")
+    set(BUILD_DWARFGEN OFF CACHE BOOL "Build dwarfgen" FORCE)
+  endif()
+  message(STATUS "Building dwarfgen ... ${BUILD_DWARFGEN}")
+endif()
 
 option(BUILD_DWARFEXAMPLE "Build dwarfexample (default is NO)" FALSE)
 message(STATUS "Building dwarfexample... ${BUILD_DWARFEXAMPLE}")
@@ -32,7 +39,6 @@ message(STATUS "Building api tests   ... ${DOTESTS}")
 option(PIC_ALWAYS "Build libdwarf with position-independent code for both static and shared (default is NO)" FALSE)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-include_directories( ${PROJECT_BINARY_DIR} )
 
 # used to compile on MSVC upto 2013 where snprintf is not available
 macro(msvc_posix target)
@@ -43,9 +49,9 @@ macro(msvc_posix target)
     endif()
 endmacro()
 
-set(LIBDWARF_CRT "MD" CACHE STRING "Either MT or MD, specifies whether to use the static or dynamic MSVCRT.")
-
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  set(LIBDWARF_CRT "MD" CACHE STRING "Either MT or MD, specifies whether to use the static or dynamic MSVCRT.")
+
   # Use CMAKE_MSVC_RUNTIME in versions 3.15 and up
   if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.15")
     cmake_policy(SET CMP0091 NEW)
@@ -54,7 +60,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
       set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     elseif(LIBDWARF_CRT STREQUAL "MD")
       message(STATUS "Using MD runtime by CMAKE_MSVC_RUNTIME_LIBRARY")
-      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+      set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     else()
       message(FATAL_ERROR "LIBDWARF_CRT must be MT or MD")
     endif()
@@ -110,10 +116,6 @@ endmacro()
 # view folders on supported IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-# tells cmake to look in 64bit first (cmake
-# would probably do this anyway).
-set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
-
 ### begin what was configure.cmake
 # cmake macros
 include(TestBigEndian)
@@ -133,12 +135,18 @@ if (${isBigEndian})
   set ( WORDS_BIGENDIAN 1 )
 endif()
 
-check_include_file( "sys/types.h"     HAVE_SYS_TYPES_H)
-check_include_file( "sys/stat.h"      HAVE_SYS_STAT_H )
-check_include_file( "stdint.h"        HAVE_STDINT_H   )
 check_include_file( "unistd.h"        HAVE_UNISTD_H   )
-check_include_file( "stdafx.h"        HAVE_STDAFX_H   )
+check_include_file( "sys/types.h"     HAVE_SYS_TYPES_H )
+check_include_file( "malloc.h"        HAVE_MALLOC_H )
+check_include_file( "stdint.h"        HAVE_STDINT_H )
+check_include_file( "inttypes.h"      HAVE_INTYPES_H )
+check_include_file( "stddef.h"        HAVE_STDDEF_H )
 check_include_file( "fcntl.h"         HAVE_FCNTL_H   )
+check_include_file( "sys/stat.h"      HAVE_SYS_STAT_H )
+check_include_file( "stdafx.h"        HAVE_STDAFX_H   )
+if (BUILD_MMAP)
+check_include_file( "sys/mman.h"      HAVE_SYS_MMAN_H )
+endif()
 
 ### cmake provides no way to guarantee uint32_t present.
 ### configure does guarantee that.
@@ -158,6 +166,24 @@ if(HAVE_STDINT_H)
       return (int)i;
   }" HAVE_INTPTR_T)
 endif()
+
+if(BUILD_MMAP AND HAVE_SYS_MMAN_H )
+  check_c_source_compiles("
+  #include <unistd.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include <sys/mman.h>
+  int main()
+  {
+      long pagesize = sysconf(_SC_PAGESIZE);
+      int fd = 4;
+      mmap(0, 100,PROT_READ|PROT_WRITE,MAP_PRIVATE,
+         fd,100);
+      munmap((void *)100,100);
+      return 0;
+  }" HAVE_FULL_MMAP)
+endif()
+
 if (HAVE_UINTPTR_T)
   message(STATUS "HAVE_UINTPTR_T 1: uintptr_t defined in stdint.h... YES")
 else()
@@ -237,30 +263,61 @@ endif ()
 
 message(STATUS "CMAKE_SIZEOF_VOID_P ... : ${CMAKE_SIZEOF_VOID_P}")
 
-#  DW_FWALLXX are gnu C++ options.
-if (WALL)
-  set(DW_FWALLXX -Wall -Wextra -Wno-unused-private-field -Wpointer-arith -Wmissing-declarations -Wcomment -Wformat -Wpedantic -Wuninitialized -Wshadow -Wno-long-long -Werror)
-  set(DW_FWALL ${DW_FWALLXX} -Wpointer-arith -Wmissing-declarations -Wmissing-prototypes -Wdeclaration-after-statement -Wextra -Wcomment -Wformat -Wpedantic -Wuninitialized -Wno-long-long -Wshadow -Werror )
-  message(STATUS "Compiler warning options... YES ${DW_FWALL}")
+if(WALL)
+  message(STATUS "Compiler warning options... YES")
 else()
-  unset(DW_FWALL )
   message(STATUS "Compiler warning options... NO")
 endif()
-#if (LIBDWARF_STATIC)
-#  set(DW_LIBDWARF_STATIC -DLIBDWARF_STATIC)
-#else()
-#  unset(DW_LIBDWARF_STATIC)
-#endif()
+
+function(dwarf_common_options TARGET)
+  get_target_property(TARGET_TYPE ${TARGET} TYPE)
+  if(TARGET_TYPE STREQUAL "INTERFACE_LIBRARY")
+    set(VISIBILITY INTERFACE)
+  else()
+    set(VISIBILITY PRIVATE)
+  endif()
+
+  msvc_posix(${TARGET})
+
+  target_compile_definitions(${TARGET} ${VISIBILITY} $<$<PLATFORM_ID:Linux>:_GNU_SOURCE>)
+
+  target_compile_options(${TARGET} ${VISIBILITY}
+
+        $<$<AND:$<BOOL:${WALL}>,$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:GNU,Clang,AppleClang>>:
+            -Wall
+            -Wextra
+            -Wno-unused-private-field
+            -Wpointer-arith
+            -Wmissing-declarations
+            -Wcomment
+            -Wformat
+            -Wpedantic
+            -Wuninitialized
+            -Wshadow
+            -Wno-long-long
+            -Werror
+        >
+
+        $<$<AND:$<BOOL:${WALL}>,$<COMPILE_LANGUAGE:C>,$<C_COMPILER_ID:GNU,Clang,AppleClang>>:
+            -Wall
+            -Wextra
+            -Wpointer-arith
+            -Wmissing-declarations
+            -Wcomment
+            -Wformat
+            -Wpedantic
+            -Wuninitialized
+            -Wshadow
+            -Wno-long-long
+            -Werror
+            -Wmissing-prototypes
+            -Wdeclaration-after-statement
+        >
+    )
+endfunction()
+
 
 configure_file(cmake/config.h.in config.h)
-
-if(BUILD_NON_SHARED)
-  set(DW_LIBDWARF_STATIC -DLIBDWARF_STATIC)
-  set(BUILD_SHARED_LIBS NO)
-else()
-  unset(DW_LIBDWARF_STATIC)
-  set(BUILD_SHARED_LIBS YES)
-endif()
 
 include(GNUInstallDirs)
 

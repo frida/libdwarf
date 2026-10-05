@@ -58,9 +58,10 @@ typedef enum /* Dwarf_Check_Categories */ {
         won't really affect client code.  The 'harmless' errors
         are reported and otherwise ignored.  It is difficult to report
         the error when the error is noticed by libdwarf, the error
-        is reported at a later time.
+        is reported at a later time. See
+        dwarf_set_harmless_errors() to turn off such error checks.
         The other errors dwarfdump reports are also generally harmless
-        but are detected by dwarfdump so it's possble to report the
+        but are detected by dwarfdump so it's possible to report the
         error as soon as the error is discovered. */
     harmless_result,
     fde_duplication,
@@ -131,6 +132,7 @@ struct glflags_s {
     Dwarf_Bool gf_info_flag;  /* .debug_info */
     Dwarf_Bool gf_line_flag;
     Dwarf_Bool gf_no_follow_debuglink;
+    Dwarf_Bool gf_no_follow_dsym;
     Dwarf_Bool gf_line_print_pc;
     Dwarf_Bool gf_line_skeleton_flag;
     Dwarf_Bool gf_loc_flag;
@@ -138,6 +140,7 @@ struct glflags_s {
     Dwarf_Bool gf_macro_flag; /* DWARF5 */
     Dwarf_Bool gf_pubnames_flag;
     Dwarf_Bool gf_debug_addr_flag;
+    Dwarf_Bool gf_print_language_version_table;
     Dwarf_Bool gf_ranges_flag; /* .debug_ranges section. */
     Dwarf_Bool gf_reloc_flag;  /* Elf relocations, not DWARF. */
     Dwarf_Bool gf_static_func_flag;/* SGI only */
@@ -148,6 +151,9 @@ struct glflags_s {
     Dwarf_Bool gf_weakname_flag;   /* SGI only */
 
     Dwarf_Bool gf_print_utf8_flag;
+    Dwarf_Bool gf_print_section_allocations;
+    Dwarf_Bool gf_allocation_via_mmap;
+    Dwarf_Bool gf_print_all_srcfiles;
 
     Dwarf_Bool gf_header_flag; /* Control printing of Elf header. */
     Dwarf_Bool gf_section_groups_flag;
@@ -176,6 +182,17 @@ struct glflags_s {
     Dwarf_Bool gf_check_attr_encoding;   /* Attributes encoding */
     Dwarf_Bool gf_generic_1200_regs;
     Dwarf_Bool gf_suppress_check_extensions_tables;
+
+    /* a call to libdwarf will speed up the library
+        See dwarf_set_harmless_errors_enabled() */
+    int        gf_suppress_harmless;
+
+    /* The following tells libdwarf not to check for duplicated
+        attributes if TRUE. */
+    Dwarf_Bool gf_no_check_duplicated_attributes;
+
+    /* The following tells dwarfdump to check for duplicated
+        attributes if TRUE. */
     Dwarf_Bool gf_check_duplicated_attributes;
     Dwarf_Bool gf_check_functions;
 
@@ -194,8 +211,10 @@ struct glflags_s {
 
     Dwarf_Bool gf_check_names;
 
-    /* During '-k' mode, display errors */
-    Dwarf_Bool gf_check_verbose_mode;
+    /*  During '-k' mode, display errors if non-zero.
+        If > 1 then display DWARF CHECK errors
+        in full detail from  dd_check_attr_encoding.c */
+    int        gf_check_verbose_mode;
 
     Dwarf_Bool gf_check_frames;
     Dwarf_Bool gf_check_frames_extended; /* Extensive frames check */
@@ -222,6 +241,7 @@ struct glflags_s {
 
     Dwarf_Bool gf_check_debug_names;
     Dwarf_Bool gf_no_sanitize_strings;
+    Dwarf_Bool gf_suppress_dup_attr_form;
 
     /* Display parent/children when in wide format? */
     Dwarf_Bool gf_display_parent_tree;
@@ -239,7 +259,7 @@ struct glflags_s {
     /* Other error in lookup by address or by_die */
     int     gf_error_code_search_by_address;
 
-    /* Avoid some unneccesary work lookup by address. */
+    /* Avoid some unnecessary work lookup by address. */
     char    gf_all_cus_seen_search_by_address;
 
     /*  Die indents >= this prefix an indent count instead
@@ -400,16 +420,12 @@ void set_checks_off(void);
 void reset_overall_CU_error_data(void);
 Dwarf_Bool cu_data_is_set(void);
 
-/*  Shortcuts for additional trace options */
+/*  Shortcuts for additional trace options.
+    Indexes into glflags.nTrace[] */
 #define KIND_OPTIONS        0   /* Dump options and stop. */
 #define KIND_RANGES_INFO    1   /* Dump RangesInfo Table. */
 #define KIND_LINKONCE_INFO  2   /* Dump Linkonce Table. */
 #define KIND_VISITED_INFO   3   /* Dump Visited Info. */
-
-#define dump_options        glflags.nTrace[KIND_OPTIONS]
-#define dump_ranges_info    glflags.nTrace[KIND_RANGES_INFO]
-#define dump_linkonce_info  glflags.nTrace[KIND_LINKONCE_INFO]
-#define dump_visited_info   glflags.nTrace[KIND_VISITED_INFO]
 
 /*  Section IDs. See also libdwarfp/pro_opaque.h DEBUG_INFO etc
     as we arbitrarily use the same numbering here.

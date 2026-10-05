@@ -71,11 +71,6 @@ dwarf_package_version(void)
 {
     return PACKAGE_VERSION;
 }
-#ifdef DEBUG_PRIMARY_DBG
-/*  These functions are helpers in printing data while
-    debugging problems.
-    In normal use these are not compiled or used.
-    Created November 2024. */
 
 const char *
 _dwarf_basename(const char *full)
@@ -97,6 +92,11 @@ _dwarf_basename(const char *full)
     }
     return (full+slashat);
 }
+#ifdef DEBUG_PRIMARY_DBG
+/*  These functions are helpers in printing data while
+    debugging problems.
+    In normal use these are not compiled or used.
+    Created November 2024. */
 void
 _dwarf_print_is_primary(const char *msg,
     Dwarf_Debug p,
@@ -189,9 +189,6 @@ _dwarf_dump_optional_fields(const char *msg,
     /* useful? */
     printf("  cc_cu_die_offset_present...: %d \n",
         context->cc_cu_die_offset_present);
-    printf("  cc_at_ranges_offset_present: %d 0x%lx\n",
-        context->cc_at_ranges_offset_present,
-        (unsigned long)context->cc_at_ranges_offset);
     printf("  cc_addr_base_offset_present: %d 0x%lx\n",
         context->cc_addr_base_offset_present,
         (unsigned long)context->cc_addr_base_offset);
@@ -902,12 +899,18 @@ _dwarf_get_abbrev_for_code(Dwarf_CU_Context context,
         dbg->de_debug_abbrev.dss_data;
     Dwarf_Unsigned     hashable_val             = 0;
 
+    if (!dbg->de_debug_abbrev.dss_data) {
+        _dwarf_error_string(dbg, error,DW_DLE_DEBUG_ABBREV_NULL,
+            "DW_DLE_DEBUG_ABBREV_NULL: Missing "
+            "abbrev section content! Corrupt object file");
+        return DW_DLV_ERROR;
+    }
     if (!hash_table_base->tb_entries) {
         hash_table_base->tb_table_entry_count =
             HT_DEFAULT_TABLE_SIZE;
         hash_table_base->tb_total_abbrev_count= 0;
 #ifdef TESTINGHASHTAB
-printf("debugging: initial size %u\n",HT_DEFAULT_TABLE_SIZE);
+        printf("debugging: initial size %u\n",HT_DEFAULT_TABLE_SIZE);
 #endif
         hash_table_base->tb_entries =
             (Dwarf_Abbrev_List *)
@@ -1016,7 +1019,7 @@ printf("debugging: initial size %u\n",HT_DEFAULT_TABLE_SIZE);
                 &context->cc_dwp_offsets,
                 DW_SECT_ABBREV,&size);
             /*  ASSERT: size != 0 */
-            end_abbrev_ptr = abbrev_ptr + size;
+            /*  Do nothing with size. */
         }
     }
 
@@ -1095,7 +1098,8 @@ printf("debugging: initial size %u\n",HT_DEFAULT_TABLE_SIZE);
         /*  Cycle thru the abbrev content,
             ignoring the content except
             to find the end of the content. */
-        res = _dwarf_count_abbrev_entries(dbg,abbrev_ptr,
+        res = _dwarf_count_abbrev_entries(dbg,
+            context->cc_abbrev_offset,abbrev_ptr,
             end_abbrev_ptr,&atcount,&impl_const_count,
             &abbrev_ptr2,error);
         if (res != DW_DLV_OK) {
@@ -1432,13 +1436,13 @@ _dwarf_free_abbrev_hash_table_contents(Dwarf_Hash_Table hash_table,
 #endif
             }
 #ifdef TESTINGHASHTAB
-printf("debugging: hashnum %lu listcount %u\n",hashnum,listcount);
+    printf("debugging: hashnum %lu listcount %u\n",hashnum,listcount);
 #endif
         }
     }
 #ifdef TESTINGHASHTAB
-printf("debugging: max ref count of any abbrev %lu, \n",
-(unsigned long)max_refs);
+    printf("debugging: max ref count of any abbrev %lu, \n",
+        (unsigned long)max_refs);
 #endif
     /* Frees all the pointers at once: an array. */
     free(hash_table->tb_entries);
@@ -1667,7 +1671,7 @@ _dwarf_read_area_length_ck_wrapper(Dwarf_Debug dbg,
     int length_size = 0;
     int exten_size = 0;
 
-    /*  This verifies the lenght itself can be read,
+    /*  This verifies the length itself can be read,
         callers must verify the length is appropriate. */
     READ_AREA_LENGTH_CK(dbg,length,Dwarf_Unsigned,
         ptr,length_size,exten_size,
@@ -1682,8 +1686,8 @@ _dwarf_read_area_length_ck_wrapper(Dwarf_Debug dbg,
 }
 /*  New March 2020 */
 /*  We need to increment startptr for the caller
-    in these wrappers so the caller passes in
-    wrappers return either DW_DLV_OK or DW_DLV_ERROR.
+    in these wrappers so the caller passes in.
+    Wrappers return either DW_DLV_OK or DW_DLV_ERROR.
     Never DW_DLV_NO_ENTRY. */
 int
 _dwarf_leb128_uword_wrapper(Dwarf_Debug dbg,

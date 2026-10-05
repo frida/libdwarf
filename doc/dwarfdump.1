@@ -84,7 +84,7 @@ finds the DWARF when given the name
 of the executable, use \--no-follow-debuglink
 to suppress this and make possible printing
 the backtrace data in section \.eh_frame).
-The third way is on MacOS: the debug DWARF
+The third way is on Macos: the debug DWARF
 is in a separate object (dwarfdump/libdwarf
 automatically find it if it is present,
 \--no-follow-debuglink suppresses this finding).
@@ -173,6 +173,7 @@ If one or more
 .BR \--file-name=<path>\ (\-x\ name=<path>)
 is given the last of these is
 used and all other such files are ignored.
+.SH ERROR CHECKING
 .PP
 Some checking (
 .BR \-k )
@@ -185,6 +186,19 @@ These are difficult to properly report in dwarfdump and
 any error strings may not appear close to the time the
 error was encountered.
 .PP
+If one or more abbreviation attributes are duplicated 
+in an abbreviation list for some Debugging Information
+Entry (a direct violation of the DWARF
+standard) you will find that adding the option
+.BR \--no-dup-attr-check
+to the options will enable you to see the
+broken set of attributes by changing a flag inside
+libdwarf itself.
+One could use the option
+.BR \-kD
+to find out what duplicated attributes exist in
+the object file.
+.PP
 If zlib compression was used on the DWARF sections
 in the object file being read the
 real section names such as .zdebug_info etc will be reported by
@@ -195,6 +209,7 @@ the offset applies to the
 uncompressed section (in memory), 
 not the .zdebug_ compressed section
 in \f2objectfilename\fP. 
+
 .SH URI-STYLE INPUT STRINGS
 .PP
 The <objectfilename> and all the options taking
@@ -289,20 +304,6 @@ Print  the .gdb_index, .debug_cu_index,
 Print .gnu_debuglink and .note.gnu.build-id sections
 
 .TP
-.BR \--suppress-debuglink-crc
-Tell libdwarf to avoid calculating debuglink crc values, 
-saving some runtime at startup and removing a
-useful check. However, finding alternate debuglink
-or buildid files remains enabled.
-
-.TP
-.BR \--no-follow-debuglink
-Tells dwarfdump and libdwarf not to pay any attention
-to .gnu.debuglink
-or .gnu.note.buildid 
-or Macos dSYM  references.
-
-.TP
 .BR \--print-frame\ (\-f)
 Print the .debug_frame section.
 .TP
@@ -374,6 +375,12 @@ Print the .debug_aranges section.
 .TP
 .BR \--print-strings\ (\-s)
 Print .debug_string section.
+
+.TP
+.BR \--print-section-allocations
+Print a short summary of section memory allocations.
+Summarizes malloc and mmap section allocations
+separately.
 
 .TP
 .BR \--print-static\ (\-ta)
@@ -538,6 +545,37 @@ Turns on type_offset checking (ensuring
 local attribute  offsets refer to what they should)
 and that DW_AT_decl_file and some other offsets
 refer to appropriate locations.
+
+.SH MISCELLANEOUS OPTIONS
+
+.TP
+.BR \--allocate-via-mmap
+When possible, libdwarf will use mmap rather than
+malloc to load section content into memory.
+
+.TP 
+.BR \--suppress-de-alloc-tree
+Tells libdwarf to omit tracking and dealloc
+of all memory allocations, relying on
+your code to do the dealloc. Use valgrind
+or a compiler option like \-fsanitize
+to check your application for failures
+to dealloc appropriately. Improves
+libdwarf performance a few percent. 
+
+.TP
+.BR \--suppress-debuglink-crc
+Tell libdwarf to avoid calculating debuglink crc values,
+saving some runtime at startup and removing a
+useful check. However, finding alternate debuglink
+or buildid files remains enabled.
+
+.TP
+.BR \--no-follow-debuglink
+Tells dwarfdump and libdwarf not to pay any attention
+to .gnu.debuglink
+or .gnu.note.buildid 
+or Macos dSYM  references.
 
 .SH OPTION MODIFIERS
 
@@ -866,7 +904,7 @@ The tied file path names the executable which has
 the .debug_addr section that may be referred to from
 the main object. See Split Objects (aka Debug Fission)
 in the DWARF5 standard.
-This cannot be used with MacOS debug
+This cannot be used with Macos debug
 or GNU debuglink, such files do not have
 a Split Dwarf object file.
 
@@ -955,6 +993,17 @@ $(HOME)/dwarfdump.conf
 
 <install-prefix>/lib/dwarfdump.conf
 .SH NOTES
+As of version 2.2.0 dwarfdump will check block FORMS such
+as DW_FORM_block2 (etc) for content that looks like
+a valid UTF8 string. Any such 
+is printed in hex with a leading 0x and ending
+with a colon (:). Following that the string (if
+longer than 1 byte and less than 5000
+bytes long) is
+printed with a leading "Block As Quoted String " which
+is there so to make searching for such in dwarfdump output
+relatively simple.
+
 In some cases compilers use DW_FORM_data1 (for example)
 and in such cases the signedness of the value must be taken
 from context. 

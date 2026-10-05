@@ -4,8 +4,7 @@
 # It uses configure and computes values we put
 # in www.prevanders.net/dwarf.html 
 
-d=0.11.2
-
+d=2.3.4
 chkres() {
 r=$1
 m=$2
@@ -27,6 +26,9 @@ chkres $? "configure failed"
 make dist
 chkres $? "make dist "
 f=libdwarf-$d.tar.xz
+ls libdwarf-$d*
+#mv  libdwarf-$d.tar.gz libdwarf-$d.tar.gz
+#chkres $? "rename failed"
 echo "Release name: $f"
 
 cp $f /home/davea/web4/gweb/pagedata/
@@ -48,7 +50,7 @@ chkres $? "sha512sum pipe failed"
   # The fold(1) is just to make the web
   # release page easier to work with.
 
-echo "The release is $bldloc/libdwarf-$d.tar.xz"
+echo "The release is $bldloc/$f"
 date
 echo "Do dwarf.html and doc/libdwarf.dox have latest?"
 echo "Now do by hand:"
@@ -61,5 +63,3 @@ echo "Then to verify tags match main:"
 echo "git diff main v$d --name-status"
 echo "git diff main libdwarf-$d --name-status"
 echo "done makerelease.sh"
-
-

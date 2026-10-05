@@ -1,12 +1,15 @@
 
 dwarfdump_src = [
   'dd_addrmap.c',
+  'dd_all_srcfiles.c',
   'dd_attr_form.c',
   'dd_canonical_append.c',
+  'dd_check_attr_encoding.c',
   'dd_checkutil.c',
   'dd_command_options.c',
   'dd_common.c',
   'dd_compiler_info.c',
+  'dd_elf_naming.c',
   'dd_regex.c',
   'dd_safe_strcpy.c',
   'dwarfdump.c',
@@ -16,6 +19,7 @@ dwarfdump_src = [
   'dd_esb.c',
   'dd_glflags.c',
   'dd_helpertree.c',
+  'dd_lvn_table.c',
   'dd_macrocheck.c',
   'dd_makename.c',
   'dd_naming.c',

@@ -32,15 +32,20 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /*  Thanks to David Grayson/
 codereview.stackexchange.com/questions/98791/
 safe-multiplication-of-two-64-bit-signed-integers
-*/
+
+In all cases the result pointer must point to
+a legitimate allocated type-appropriate area.
+(so, must not be NULL) */
 
 int _dwarf_int64_mult(Dwarf_Signed x, Dwarf_Signed y,
     Dwarf_Signed * result,
     Dwarf_Debug dbg, Dwarf_Error*error);
 
 int _dwarf_uint64_mult(Dwarf_Unsigned x, Dwarf_Unsigned y,
-    Dwarf_Unsigned * result,
-    Dwarf_Debug dbg, Dwarf_Error *error);
+    Dwarf_Unsigned * result);
+
+int _dwarf_uint64_add( Dwarf_Unsigned dw_lhs, Dwarf_Unsigned dw_rhs,
+    Dwarf_Unsigned *result);
 
 #if 0
 /* See:
@@ -48,6 +53,6 @@ https://stackoverflow.com/questions/
 3944505/detecting-signed-overflow-in-c-c
 */
 int _dwarf_signed_add_check(Dwarf_Signed l, Dwarf_Signed r,
-    Dwarf_Signed *sum, Dwarf_Debug dbg,
+    Dwarf_Signed *result, Dwarf_Debug dbg,
     Dwarf_Error *error);
 #endif /* 0 */

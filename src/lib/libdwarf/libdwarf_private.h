@@ -26,11 +26,7 @@
 #ifdef _MSC_VER /* Macro to select VS compiler */
 #include <windows.h>
 typedef SSIZE_T ssize_t;
-#ifdef _WIN64
-typedef long long off_t;
-#else
-typedef long off_t;
-#endif
+/* typedef of off_t were causing trouble for some. Removed. */
 #endif /* _MSC_VER */
 
 #ifndef TRUE
@@ -60,7 +56,9 @@ typedef long off_t;
     } while (0)
 #endif /* end LITTLE- BIG-ENDIAN */
 
-/* The following actually assumes (as used here)
+/*   See also dwarf_elf_load_headers.c for ASNARLRAW */
+
+/*  The following actually assumes (as used here)
     that t is 8 bytes (integer) while s is
     also 8 bytes (Dwarf_Sig8 struct).
     Just slightly different from the ASNAR generally

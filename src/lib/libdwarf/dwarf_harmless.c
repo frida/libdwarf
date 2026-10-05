@@ -1,5 +1,5 @@
 /*
-  Copyright (C) 2010-2022 David Anderson. All Rights Reserved.
+  Copyright (C) 2010-2026 David Anderson. All Rights Reserved.
   Portions Copyright 2012 SN Systems Ltd. All rights reserved.
 
   This program is free software; you can redistribute it
@@ -54,6 +54,7 @@
 #include <config.h>
 
 #include <stddef.h>  /* size_t */
+#include <stdio.h>   /* for debugging this code */
 #include <stdlib.h>  /* free() malloc() */
 #include <string.h>  /* memcpy() strcpy() strlen() */
 
@@ -124,6 +125,15 @@ dwarf_get_harmless_error_list(Dwarf_Debug dbg,
     dhp->dh_first = 0;
     dhp->dh_errs_count = 0;
     return DW_DLV_OK;
+}
+
+int
+dwarf_set_harmless_errors_enabled(Dwarf_Debug dbg,
+    int v)
+{
+    int ov = dbg->de_harmless_errors_on;
+    dbg->de_harmless_errors_on = (char)v;
+    return ov;
 }
 
 /*  Insertion made public is only for testing the harmless error code,

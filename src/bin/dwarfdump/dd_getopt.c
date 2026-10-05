@@ -151,7 +151,7 @@ dwoptnamematches(
 }
 
 /*  dwgetopt_long
-    A reimplemention of  a portion of
+    A reimplementation of a portion of
     the getopt(3) GNU/Linux  getopt_long().
     See dwgetopt.h for more details.
 */
@@ -317,7 +317,7 @@ dwgetopt(int nargc, char * const nargv[], const char *ostr)
         dwoptopt = *place++;
     }
     /* See if option letter is one the caller wanted... */
-    if (dwoptopt == ':' || (oli = strchr(ostr, dwoptopt)) == NULL) {
+    if (dwoptopt == ':' || (oli = strchr((char *)ostr, dwoptopt)) == NULL) {
         if (*place == 0) {
             ++dwoptind;
         }

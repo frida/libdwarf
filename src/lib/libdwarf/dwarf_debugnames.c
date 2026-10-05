@@ -252,7 +252,8 @@ fill_in_abbrevs_table(Dwarf_Dnames_Head dn,
             "abbrev final NUL byte");
         return DW_DLV_ERROR;
     }
-    if ( abcur < tabend) {
+    if (abcur < tabend &&
+        dbg->de_harmless_errors_on) {
         unsigned padcount = 0;
 
         for (; abcur < tabend; ++abcur) {
@@ -847,9 +848,12 @@ dwarf_dnames_header(Dwarf_Debug dbg,
         curptr += usedspace;
         for ( ; curptr < end_section; ++curptr) {
             if (*curptr) {
+                /*  Fixing Coverity Scan CID 581830
+                    resource leak if just call dealloc,
+                    so call local dealloc to do it. */
+                dwarf_dealloc_dnames(dn);
                 /*  One could argue this is a harmless error,
                     but for now assume it is real corruption. */
-                dwarf_dealloc(dbg,dn,DW_DLA_DNAMES_HEAD);
                 _dwarf_error_string(dbg, error,
                     DW_DLE_DEBUG_NAMES_PAD_NON_ZERO,
                     "DW_DLE_DEBUG_NAMES_PAD_NON_ZERO: "

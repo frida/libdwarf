@@ -1,6 +1,990 @@
 <?xml version="1.0" encoding="us-ascii"?>
 <dwarfbug>
 <dwbug>
+<dwid>DW202605-008</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 516582687</fuzzer>
+<datereported>2026-05-26</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Leak from read_gs_section_group
+</vulnerability>
+<description> Direct leak of memory.
+  A very badly corrupted Elf object file resulted
+  in a section being treated as both a .strtab and  an SHT_GROUP
+  leading to a leak of memory. A corruption with
+  .symtab and SHT_GROUP would have the same problem.
+  Now libdwarf notices and returns an error instead of leaking memory.
+  Leakage caused by the revision of dwarf_elfread.c last month (April).
+  So the bug was introduced a few weeks ago.
+</description>
+<datefixed>2026-05-26</datefixed>
+<references> regressiontests/ossfuzz516582687/fuzz_gdbindex-5725564647571456
+</references>
+<gitfixid>6e6d732a3b921d7f771b0bfe417a3e3c47520dac</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202605-007</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 514729017</fuzzer>
+<datereported>2026-05-19</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Leak from _dwarf_load_elf_sectheaders()
+</vulnerability>
+<description> Direct leak of memory.
+  A very badly corrupted Elf object file resulted in repeating
+  the allocation of a string table, leaving the original copy
+  to leak memory.  Now we notice the attempted repeat
+  and return an error.
+</description>
+<datefixed>2026-05-24</datefixed>
+<references> regressiontests/ossfuzz514729017/fuzz_die_cu_e_print-4644164729110528
+</references>
+<gitfixid>12162ed757c510b06b8b53154e8f971053164ba3</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202605-006</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 514753154</fuzzer>
+<datereported>2026-05-19</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Double free and crash reading section group data
+</vulnerability>
+<description> Reading a corrupted object file resulted
+  in a double-free and a crash.
+  An earlier bug report this month (May) also
+  fixed this.
+</description>
+<datefixed>2026-05-23</datefixed>
+<references> regressiontests/ossfuzz514753154/fuzz_showsectgrp-5634424300699648
+</references>
+<gitfixid>f49716564b3a263ce81c5319fecea4c9319e178f</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202605-005</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 514727740</fuzzer>
+<datereported>2026-05-19</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Double free and crash reading section group data
+</vulnerability>
+<description> A severly corrupted object file exposed
+  broken code in read_gs_section_group(), it was
+  doing a free(data) but data was stale, ownership
+  was transferred to gh_content so now data=0 as soon
+  as ownership transferred and dropped the incorrect free().
+  The bug was introduced Earlier in this month, May 2026.
+</description>
+<datefixed>2026-05-23</datefixed>
+<references> regressiontests/ossfuzz514727740/fuzz_init_b-4646656783220736
+</references>
+<gitfixid>f49716564b3a263ce81c5319fecea4c9319e178f</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202605-004</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 488137256</fuzzer>
+<datereported>2026-02-26</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Leaks memory in _dwarf_internal_read_rnglists_header
+</vulnerability>
+<description> A severly corrupted object file exposed
+  broken code in _dwarf_elf_setup_all_section_groups() which
+  memory allocated in _dwarf_internal_read_rnglists_header() failed to
+  free(buildhere-&gt;lc_offset_value_array) before returning.
+  The bug was introduced in libdwarf-2.0.0, May 2025.
+</description>
+<datefixed>2026-05-20</datefixed>
+<references> regressiontests/ossfuzz488137256/fuzz_die_cu-4889329913888768
+</references>
+<gitfixid>f45f68da5c107bdfbc82fd4d4662048ffe12ab88</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202605-003</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 513010516</fuzzer>
+<datereported>2026-05-14</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Leaks memory reading section group data.
+</vulnerability>
+<description>  Ossfuzz vulnerability  513010516
+  Vulnerability existed since 2026-05-12 (new
+  versions of Elf reading functions).
+  The function was not completely updated to match
+  the revisions introduced 12 May (4 days ago),
+  leading directly to the leak.
+  Leak was a mishandling when Elf SHF_GROUP flag was set
+  in a section header.
+</description>
+<datefixed>2026-05-16</datefixed>
+<references> regressiontests/ossfuzz513010516/fuzz_dnames-5764687336898560
+</references>
+<gitfixid>4c8aecaf95f94ff4baa8840ea90df7b5fd14a71f</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202605-002</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 513032442</fuzzer>
+<datereported>2026-05-14</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> duplicate free results in abort.
+</vulnerability>
+<description> Reading a corrupted object frame section results
+  in a use-after-free error and memory leak and abort in libdwarf.
+  Ossfuzz vulnerability  513032442
+  Vulnerability existed since 2026-05-12 (new
+  versions of Elf reading functions).
+  Identical fix as to DW202605-001.
+</description>
+<datefixed>2026-05-16</datefixed>
+<references> regressiontests/ossfuzz513032442/fuzz_findfuncbypc-5181686974578688
+</references>
+<gitfixid>27a19350b16995730d82fd1c224a7f22b39c443c</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202605-001</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 513063397</fuzzer>
+<datereported>2026-05-12</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> duplicate free results in abort.
+</vulnerability>
+<description> Reading a corrupted object frame section results
+  in a use-after-free error and memory leak and abort in libdwarf.
+  Ossfuzz vulnerability  513063397
+  Vulnerability existed since 2026-05-12 (new
+  versions of Elf reading functions).
+</description>
+<datefixed>2026-05-16</datefixed>
+<references> regressiontests/ossfuzz513063397/fuzz_init_b-6754026074210304
+</references>
+<gitfixid>27a19350b16995730d82fd1c224a7f22b39c443c</gitfixid>
+<tarrelease>libdwarf-2.3.2.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202602-001</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 4475563464</fuzzer>
+<datereported>2026-02-10</datereported>
+<reportedby>Oliver Chang</reportedby>
+<product>libdwarf</product>
+<vulnerability> Use After Free and memory leak
+</vulnerability>
+<description> Reading a corrupted object frame section results
+  in a use-after-free error and memory leak in libdwarf.
+  Ossfuzz vulnerability  4475563464
+  Vulnerability existed since 2026-01-12 (new
+  versions of frame reading functions).
+</description>
+<datefixed>2026-02-10</datefixed>
+<references> regressiontests/ossfuzz4475563464/fuzz_set_frame_all-6159202753249280
+</references>
+<gitfixid>9d08910d34e88ab61d197ce4e089a869b1ab9510</gitfixid>
+<tarrelease>libdwarf-2.3.1.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202510-003</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 449018019</fuzzer>
+<datereported>2025-09-30</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_crc_32 testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  A segment name is incorrect.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-30</datefixed>
+<references> regressiontests/ossfuzz449018019/
+</references>
+<gitfixid>43bb5458f5600d231f1e11d31cf2b29748fd1925</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202510-002</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 448717186</fuzzer>
+<datereported>2025-09-30</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_debug_str testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  A segment name is incorrect.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-30</datefixed>
+<references> regressiontests/ossfuzz448717186/
+</references>
+<gitfixid>43bb5458f5600d231f1e11d31cf2b29748fd1925</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202510-001</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 448522799</fuzzer>
+<datereported>2025-10-01</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_gnu_index testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  A segment name is incorrect.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed></datefixed>
+<references> regressiontests/ossfuzz448522799/fuzz_gnu_index-5175853874216960
+</references>
+<gitfixid>43bb5458f5600d231f1e11d31cf2b29748fd1925</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-024</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447805105</fuzzer>
+<datereported>2025-09-26</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_showsectgrp testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  The count of commands times commands size is too large to be real.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-30</datefixed>
+<references> regressiontests/ossfuzz447805105/fuzz_showsectgrp-5078066159484928
+</references>
+<gitfixid>43bb5458f5600d231f1e11d31cf2b29748fd1925</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-023</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447421051</fuzzer>
+<datereported>2025-09-24</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_crc_32 testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  The count of commands times commands size is too large to be real.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-29</datefixed>
+<references> regressiontests/ossfuzz447421051/fuzz_crc_32-6747299494821888
+</references>
+<gitfixid>f5261095a4a217cfe91d7d463cb9febf5adb9191</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-022</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447586815</fuzzer>
+<datereported>2025-09-26</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_die_cu_e testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  The count of commands times commands size is too large to be real.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-29</datefixed>
+<references> regressiontests/ossfuzz447586815/fuzz_die_cu_e-6725653933391872
+</references>
+<gitfixid>481058cdd698baf281e49b1c3b3bfe3ccab75b86</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-021</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 	447600209</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_debug_str testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  The count of commands times commands size is too large to be real.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-29</datefixed>
+<references> regressiontests/ossfuzz447600209/fuzz_debug_str-6405288967340032
+</references>
+<gitfixid>481058cdd698baf281e49b1c3b3bfe3ccab75b86</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-020</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447797928</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_init_b testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  The count of segments times segment size is too large to be real.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-29</datefixed>
+<references> regressiontests/ossfuzz447797928 fuzz_init_b-6276293315592
+</references>
+<gitfixid>481058cdd698baf281e49b1c3b3bfe3ccab75b86</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-019</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447702256</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_init_binary testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Inappropriate non-ascii characters in section names.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+</description>
+<datefixed>2025-09-28</datefixed>
+<references> regressiontests/ossfuzz447702256/fuzz_init_binary-4759449983320064
+</references>
+<gitfixid>972fbafe2c39eca740512751258ff760753fc9f3</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-018</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447702256</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_init_binary testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Inappropriate non-ascii characters in section names.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+</description>
+<datefixed>2025-09-28</datefixed>
+<references> regressiontests/ossfuzz447702256/fuzz_init_binary-4759449983320064
+</references>
+<gitfixid>972fbafe2c39eca740512751258ff760753fc9f3</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-017</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447702256</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_init_binary testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Inappropriate non-ascii characters in section names.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+</description>
+<datefixed>2025-09-28</datefixed>
+<references> regressiontests/ossfuzz447702256/fuzz_init_binary-4759449983320064
+</references>
+<gitfixid>972fbafe2c39eca740512751258ff760753fc9f3</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-016</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447629673</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_globals testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Inappropriate non-ascii characters in section names.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+</description>
+<datefixed></datefixed>
+<references> regressiontests/ossfuzz447629673/fuzz_die_cu_print-4591618901737472
+</references>
+<gitfixid>972fbafe2c39eca740512751258ff760753fc9f3</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-015</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447580449</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_globals testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Inappropriate non-ascii characters in section names.
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+</description>
+<datefixed></datefixed>
+<references> regressiontests/ossfuzz447580449/fuzz_debuglink-469140951407001
+</references>
+<gitfixid>972fbafe2c39eca740512751258ff760753fc9f3</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-014</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447580450</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_globals testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Reading 64bit section details (section name)
+  did not complete in
+  a reasonable time. Corrupted 64bit section data
+  caused the slowness.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+</description>
+<datefixed>2025-09-27</datefixed>
+<references> regressiontests/ossfuzz447580450/fuzz_globals-4845056734593024
+</references>
+<gitfixid>5a73dc27a73678b59d6b3a1d3fef07d48cd24597</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-013</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447396726</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_xuindex testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Reading 64bit section details did not complete in
+  a reasonable time. Corrupted section data
+  caused the slowness.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+</description>
+<datefixed>2025-09-27</datefixed>
+<references> regressiontests/ossfuzz447396726/fuzz_xuindex-4824455521304576
+</references>
+<gitfixid>5a73dc27a73678b59d6b3a1d3fef07d48cd24597</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-012</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447421051</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_str_offsets testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Reading 64bit section details did not complete in
+  a reasonable time. Corrupted section data
+  caused the slowness.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+</description>
+<datefixed>2025-09-27</datefixed>
+<references> regressiontests/447421051/fuzz_str_offsets-4859796391264256
+</references>
+<gitfixid>5a73dc27a73678b59d6b3a1d3fef07d48cd24597</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-011</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447445674</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time reading fuzz_str_offsets testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Reading 64bit section details did not complete in
+  a reasonable time. Corrupted section data
+  caused the slowness.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+</description>
+<datefixed>2025-09-27</datefixed>
+<references> regressiontests/ossfuzz447445674/fuzz_str_offsets-4859796391264256
+</references>
+<gitfixid>5a73dc27a73678b59d6b3a1d3fef07d48cd24597</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-010</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 447457197</fuzzer>
+<datereported>2025-09-25</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time running fuzz_tie test case.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object.
+  Reading 64bit section details did not complete in
+  a reasonable time.
+  Been a vulnerability since Mach-o support added in 2018,
+  though only exposed as of a couple of weeks ago..
+  We now check more thoroughly and return error quickly
+  so there is no slowdown.
+</description>
+<datefixed>2025-09-27</datefixed>
+<references> regressiontests/ossfuzz447457197/fuzz_tie-4785079261134848
+</references>
+<gitfixid>5a73dc27a73678b59d6b3a1d3fef07d48cd24597</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-009</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446726228</fuzzer>
+<datereported>2025-09-23</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_debuglink  testcase.
+</vulnerability>
+<description> Vulnerability involving slow access to
+  a corrupted Mach-o object. Where 'command-size' times
+  'command-count' exceeds the size of the object file.
+  The fix for DW202509-002 oss fuzz 446726229
+  also added these checks for error.
+  Been a vulnerability since Mach-o support added in 2018.
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446726228/fuzz_debuglink-4854619680604160
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-008</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446831123</fuzzer>
+<datereported>2025-09-23</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_rng  testcase.
+</vulnerability>
+<description> A corrupted MacOS objectfile containing
+  segments with unknown strings as the
+  segment name exceeded reasonable bounds on run time.
+  Segment names are defined by the compiler
+  and we now check for valid segment names.
+  This vulnerability has been present since Mach-o
+  object support was added in 2018.
+  (Segment names are defined by the ABI and compiler-writers).
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446831123/fuzz_rng-6527551318327296
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-007</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446735540</fuzzer>
+<datereported>2025-09-23</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_dnames  testcase.
+</vulnerability>
+<description> A corrupted MacOS objectfile containing
+  unreasonable header fields for the size and count
+  of segments lead to excessive time trying to
+  read the file.  We now more thoroughly check
+  the fields.
+  This vulnerability has been present since Mach-o
+  object support was added in 2018.
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446735540/fuzz_dnames-5931269398790144
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-006</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446856589</fuzzer>
+<datereported>2025-09-23</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_tie  testcase.
+</vulnerability>
+<description> A corrupted MacOS objectfile containing
+  segments with unknown strings as the
+  segment name exceeded reasonable bounds on run time.
+  Segment names are defined by the compiler
+  and we now check for valid segment names.
+  This vulnerability has been present since Mach-o
+  object support was added in 2018.
+  We now check that segment names are valid.
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446856589/fuzz_tie-5831785406857216
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-005</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446746574</fuzzer>
+<datereported>2025-09-23</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_aranges  testcase.
+</vulnerability>
+<description> A corrupted MacOS objectfile containing
+  segments with unknown strings as the
+  segment name exceeded reasonable bounds on run time.
+  Segment names are defined by the compiler
+  and we now check for valid segment names.
+  This vulnerability has been present since Mach-o
+  object support was added in 2018.
+  We now check that section names are plain ASCII.
+  (Such are defined by the ABI and compiler-writers.)
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446746574/fuzz_aranges-4698786724380672
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-004</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446781574</fuzzer>
+<datereported>2025-09-22</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_gdbindex  testcase.
+</vulnerability>
+<description> Reading a corrupted object takes excessive
+  time due to the failure to notice the corruption.
+  Segment size and segment counts (multiplied)
+  gave value larger than file size.
+  This vulnerability has been present since Mach-o
+  object support was added in 2018.
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446781574/fuzz_gdbindex-4712655307997184
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-003</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446729093</fuzzer>
+<datereported>2025-09-22</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_init_binary testcase.
+</vulnerability>
+<description> Reading a corrupted object takes excessive
+  time due to the failure to notice the corruption.
+  Segment size and segment counts (multiplied)
+  gave value larger than file size.
+  This vulnerability has been present since Mach-o
+  object support was added in 2018.
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446729093/fuzz_init_binary-5396366991097856
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-002</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446726229</fuzzer>
+<datereported>2025-09-22</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Excessive time in fuzz_globals testcase.
+</vulnerability>
+<description> A corrupted MacOS objectfile containing
+  segments with unknown strings as the
+  segment name exceeded reasonable bounds on run time.
+  Segment names are defined by the compiler
+  and we now check for valid segment names.
+  This vulnerability has been present since Mach-o
+  object support was added in 2018.
+  We now check that section names are plain ASCII.
+</description>
+<datefixed>2025-09-23</datefixed>
+<references> regressiontests/ossfuzz446726229/fuzz_globals-5387186766938112
+</references>
+<gitfixid>9c638a21357279b9e4b1ee0c4ff7a128c3f1632e</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202509-001</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 446356422</fuzzer>
+<datereported>2025-09-19</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Heap buffer overflow loading Mach-o section data
+</vulnerability>
+<description> A corrupt (fuzzed) Apple Mach-o object file resulted
+  in an overflow in copying object data to internal structures.
+  Possibly leading to crash and denial of service.
+  The bug was present in the code for 2 days.
+</description>
+<datefixed>2025-09-21</datefixed>
+<references> regressiontests/ossfuzz446356422/fuzz_crc_32-4931308642172928
+</references>
+<gitfixid>651ceb7069b311911152a87efcf7c2fc44925f67</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202508-001</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 437060549</fuzzer>
+<datereported>2025-08-07</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Heap buffer overflow in dwarf_globals.c
+</vulnerability>
+<description> A corrupt (fuzzed) object file resulted
+  in an overflow and an incorrect check and incorrect
+  access to memory.
+  The error check is now valid.
+  The bug has been present since at least 2006 (release
+  dwarf-20060308).
+  Look for MIN_CU_HDR_SIZE in dwarf_global.c .
+</description>
+<datefixed>2025-08-08</datefixed>
+<references> regressiontests/ossfuzz437060549/fuzz_globals-4771320878661632
+</references>
+<gitfixid>efa242489a69b13bc6eedc6766880335ac42d158</gitfixid>
+<tarrelease>libdwarf-2.2.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202502-001</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 394644267</fuzzer>
+<datereported>2025-02-05</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Heap buffer overflow in dwarf_macro5.c
+</vulnerability>
+<description> A corrupt (fuzzed) .debug_macro resulted in
+  a failed attempt to catch an error as a small
+  add overflowed bypassing the error-check.
+  The error check is now corrected and completed.
+  This has been a vulnerability since dwarf5 macro support
+  was added in 2021.
+</description>
+<datefixed>2025-01-07</datefixed>
+<references> regressiontests/ossfuzz394644267/fuzz_macro_dwarf5-5504709091983360 fuzz_macro_dwarf5-5504709091983360
+</references>
+<gitfixid>156156a80affdc63b851fbf7fdc01e4d41849eb0</gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202412-011</dwid>
+<cve></cve>
+<fuzzer>oss fuzz  (no id)</fuzzer>
+<datereported>2024-12-13</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Fails to stop inconsistent time. DoS.
+</vulnerability>
+<description> A 20K list of attributes to one DIE in
+  a fuzzed object file (the vast majority duplicates)
+  resulted in a caller continuing to operate (with
+  many messages) for a long and inconsistent time.
+  Now, by default, libdwarf checks for duplicated
+  Attributes and returns DW_DLV_ERROR as soon as
+  one is noticed.
+  This has been a vulnerability since libdwarf was
+  written in the early 1990s.
+</description>
+<datefixed>2024-12-28</datefixed>
+<references> regressiontests/DW202412-011/fuzz_die_cu_attrs-5424995441901568
+</references>
+<gitfixid>2161332885c50074f15c0e1a7339c330cbf88c62</gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202412-010</dwid>
+<cve></cve>
+<fuzzer>oss fuzz 385742125</fuzzer>
+<datereported>2024-12-21</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> NULL-dereference READ
+</vulnerability>
+<description> A mistake made in 2021 resulted in adding
+  to an end-section pointer (in .debug_abbrev),
+  and it was an error to do that.
+  The mistake is in code rarely executed.
+  The fuzzed test object caused the bogus add
+  and -fsanitize noticed.
+</description>
+<datefixed>2024-12-23</datefixed>
+<references> regressiontests/ossfuzz385742125/fuzz_die_cu_print-5500979604160512
+</references>
+<gitfixid>375d102768ee1ff953f97a93345318db3f63ea3c</gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202412-009</dwid>
+<cve></cve>
+<fuzzer>oss fuzz  (no id)</fuzzer>
+<datereported>2024-12-15</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Runs too long, to many error msgs.
+</vulnerability>
+<description> A very badly damaged MachO object
+  runs a long time emitting error messages.
+  Essentially the count of segments and the
+  size of the block of segment data are both
+  larger than is usable in MacOS (either one larger
+  means corrupt).
+  It's not an infinite process, but it is improperly long
+  with too many messages.
+</description>
+<datefixed>2024-12-24</datefixed>
+<references> regressiontests/DW202412-009/fuzz_init_path-5854698061496320
+</references>
+<gitfixid></gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202412-008</dwid>
+<cve></cve>
+<fuzzer>oss fuzz id: 42536144</fuzzer>
+<datereported>2024-12-21</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Null-dereference READ
+</vulnerability>
+<description> A very badly damaged object
+  with .debug_cu[ or tu]_index results in
+  attempting to eccess .debug_cu_index
+  in memory -- which has not been loaded due to
+  damage.  So we assumed it was loaded
+  and used a null pointer value to read the index
+  contents resulting in a crash.
+  Now we  load the section and immediately
+  fail due to the corruption and we generate an error.
+  This has been a bug since the code was written
+  in 2021.
+</description>
+<datefixed>2024-12-23</datefixed>
+<references> regressiontests/ossfuzz385466100/fuzz_die_cu_offset-6604029974609920
+</references>
+<gitfixid>4e6e7cafa6bef0629e5ea2bbf63a4e2f84c5a938</gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
+<dwid>DW202412-007</dwid>
+<cve></cve>
+<fuzzer>oss fuzz id: 42536144</fuzzer>
+<datereported>2024-12-05</datereported>
+<reportedby>David Korczynski</reportedby>
+<product>libdwarf</product>
+<vulnerability> Out Of Memory
+</vulnerability>
+<description> A certain corrupted location expression
+  (in  a fuzzed object file)
+  resulted in an effectively infinite loop (by
+  failing to notice a value read was improper) reading
+  expressions and allocating memory.
+  Now we check to ensure we do not loop forever and we return
+  an error. This has been unchecked for many years.
+</description>
+<datefixed>2024-12-11</datefixed>
+<references> regressiontests/ossfuzz42536144/fuzz_die_cu_attrs_loclist-5906068650655744
+</references>
+<gitfixid>a0d983611468e3882c9fee92197d321ae4580c1a</gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
+</dwbug>
+<dwbug>
 <dwid>DW202412-006</dwid>
 <cve></cve>
 <fuzzer>honggfuzz id: 383170474</fuzzer>
@@ -10,6 +994,7 @@
 <vulnerability> Heap Buffer Overflow READ 1
 </vulnerability>
 <description> In dwarf_dnames_header()
+  (libdwarf/dwarf_debugnames.c)
   an accidental += resulted in changing
   a local pointer not meant to be changed.
   So tests for appropriate pointers worked
@@ -18,13 +1003,14 @@
   Also, a computation of end_section (pointer)
   was incorrect in one place.
   The first error was introduced this month (December
-  2024), it was not in the v0.11.1 release.
+  2024), it was not in the v0.11.1 release December 1
+  2024.
 </description>
-<datefixed></datefixed>
-<references>regressiontests/
+<datefixed>2024-12-10</datefixed>
+<references>regressiontests/ossfuzz383170474/fuzz_globals-4515360770228224.fuzz
 </references>
-<gitfixid></gitfixid>
-<tarrelease></tarrelease>
+<gitfixid>43be4567488c8b531d1ae98fe128f5eda374098e</gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202412-005</dwid>
@@ -41,11 +1027,11 @@
   Exactly the same failure as
   DW202412-001 ossfuzz id:71721677.
 </description>
-<datefixed></datefixed>
+<datefixed>2024-12-10</datefixed>
 <references>regressiontests/ossfuzz380108595/fuzz_aranges-5572243180027904
 </references>
-<gitfixid></gitfixid>
-<tarrelease></tarrelease>
+<gitfixid>43be4567488c8b531d1ae98fe128f5eda374098e</gitfixid>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202412-004</dwid>
@@ -66,7 +1052,7 @@
 <references>regressiontests/ossfuzz379159140/fuzz_die_cu_print-5335984847257600
 </references>
 <gitfixid>e9340b7fb01f9ee479a1a26cc10895d4eb305cc6</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202412-003</dwid>
@@ -87,7 +1073,7 @@
 <references>regressiontests/ossfuzz372754161/fuzz_globals-6058837938864128
 </references>
 <gitfixid>e9340b7fb01f9ee479a1a26cc10895d4eb305cc6</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202412-002</dwid>
@@ -117,7 +1103,7 @@
 <references>regressiontests/ossfuzz371659894/fuzz_die_cu_attrs-6661686947282944
 </references>
 <gitfixid>e69eb5da569ce8d3a76ac1aa2f1ae9d371729dbf</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202412-001</dwid>
@@ -137,7 +1123,7 @@
 <references>regressiontests/ossfuzz371721677/fuzz_die_cu_e_print-4913953320271872
 </references>
 <gitfixid>e9340b7fb01f9ee479a1a26cc10895d4eb305cc6</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202409-001</dwid>
@@ -165,7 +1151,7 @@
 <references> regressiontests/ossfuzz42538203/fuzz_findfuncbypc-5117956621664256
 </references>
 <gitfixid>9f11f8351c85f7715144943f72cd72f011616fe8</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.12.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-012</dwid>
@@ -189,7 +1175,7 @@
 <references> regressiontests/ossfuzz70763/fuzz_macro_dwarf5-5161075908083712
 </references>
 <gitfixid>1b79d618bf5aab2bda9be495c531b13e94ae056a</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-011</dwid>
@@ -213,7 +1199,7 @@
 <references> regressiontests/ossfuzz70753/fuzz_die_cu_offset-6598270743281664
 </references>
 <gitfixid>1b79d618bf5aab2bda9be495c531b13e94ae056a</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-010</dwid>
@@ -235,7 +1221,7 @@
 <references> regressiontests/ossfuzz70721/fuzz_macro_dwarf5-4907954017468416
 </references>
 <gitfixid>6fa96f95e043bac9b98ca6f7a9a542dae8f46cd</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-009</dwid>
@@ -255,7 +1241,7 @@
 <references> regressiontests/ossfuzz70287/
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-008</dwid>
@@ -275,7 +1261,7 @@
 <references> regressiontests/ossfuzz70282/
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-007</dwid>
@@ -295,7 +1281,7 @@
 <references> regressiontests/ossfuzz70278/
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-006</dwid>
@@ -315,7 +1301,7 @@
 <references> regressiontests/ossfuzz70277/
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-005</dwid>
@@ -335,7 +1321,7 @@
 <references> regressiontests/ossfuzz70266/fuzz_findfuncbypc-6093996460408832
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-004</dwid>
@@ -355,7 +1341,7 @@
 <references> regressiontests/ossfuzz70263/fuzz_die_cu-4960441042796544
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-003</dwid>
@@ -375,7 +1361,7 @@
 <references> regressiontests/ossfuzz70256/fuzz_rng-483822291655065
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-002</dwid>
@@ -395,7 +1381,7 @@
 <references> regressiontests/ossfuzz70246/fuzz_macro_dwarf5-5128935898152960
 </references>
 <gitfixid>d7c4efdcc7952b38a237a36ccedf364018e0fb1c</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202407-001</dwid>
@@ -414,7 +1400,7 @@
 <references> regressiontests/ossfuzz70244/fuzz_die_cu_attrs_loclist-4958134427254784
 </references>
 <gitfixid>906a4428a5d92e17948da4249cfccbe8f5ae8005</gitfixid>
-<tarrelease></tarrelease>
+<tarrelease>libdwarf-0.11.0.tar.xz</tarrelease>
 </dwbug>
 <dwbug>
 <dwid>DW202406-002</dwid>

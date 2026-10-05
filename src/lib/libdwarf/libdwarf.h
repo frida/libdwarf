@@ -29,8 +29,8 @@
   Floor, Boston MA 02110-1301, USA.
 
 */
-/*! @file*/
-/*! @page libdwarf.h
+/*! @file libdwarf.h */
+/*! @page libdwarfheader
     @tableofcontents
     libdwarf.h contains all the type declarations
     and function function declarations
@@ -99,20 +99,20 @@ extern "C" {
 */
 
 /* Semantic Version identity for this libdwarf.h */
-#define DW_LIBDWARF_VERSION "0.11.2"
-#define DW_LIBDWARF_VERSION_MAJOR 0
-#define DW_LIBDWARF_VERSION_MINOR 11
-#define DW_LIBDWARF_VERSION_MICRO 2
+#define DW_LIBDWARF_VERSION "2.3.4"
+#define DW_LIBDWARF_VERSION_MAJOR 2
+#define DW_LIBDWARF_VERSION_MINOR 3
+#define DW_LIBDWARF_VERSION_MICRO 4
 
 #define DW_PATHSOURCE_unspecified 0
 #define DW_PATHSOURCE_basic     1
-#define DW_PATHSOURCE_dsym      2 /* MacOS dSYM */
+#define DW_PATHSOURCE_dsym      2 /* Macos dSYM */
 #define DW_PATHSOURCE_debuglink 3 /* GNU debuglink */
 
 #ifndef DW_FTYPE_UNKNOWN
 #define DW_FTYPE_UNKNOWN    0
 #define DW_FTYPE_ELF        1  /* Unix/Linux/etc */
-#define DW_FTYPE_MACH_O     2  /* MacOS. */
+#define DW_FTYPE_MACH_O     2  /* Macos. */
 #define DW_FTYPE_PE         3  /* Windows */
 #define DW_FTYPE_ARCHIVE    4  /* unix archive */
 #define DW_FTYPE_APPLEUNIVERSAL    5
@@ -543,6 +543,14 @@ typedef struct Dwarf_Ranges_s {
             block.bl_len.
         Other values of dw_value_type are an error.
 
+        DWARF is showing what a debugger would act on to
+        calculate actual register values. Libdwarf does
+        not know any register values and cannot calculate
+        any.  If a caller wishes to actually do the
+        proper calculations the caller must provide
+        its own register data space and calculate new values
+        and new register status in the caller's register data.
+
         Note that this definition can only deal correctly
         with register numbers that fit in a 16 bit
         unsigned value.  Removing this
@@ -580,6 +588,12 @@ typedef struct Dwarf_Regtable_Entry3_s {
 */
 typedef struct Dwarf_Regtable3_s {
     struct Dwarf_Regtable_Entry3_s   rt3_cfa_rule;
+    /*  Required Condition:
+        rt3_rules points to array rt3_reg_table_size
+            of struct Dwarf_Regtable_Entry3_s and the
+            array entries should be all zero bits
+            on calling dwarf_get_fde_info_for_all_regs3_b().
+    */
     Dwarf_Half                       rt3_reg_table_size;
     struct Dwarf_Regtable_Entry3_s * rt3_rules;
 } Dwarf_Regtable3;
@@ -601,6 +615,11 @@ typedef struct Dwarf_Error_s*      Dwarf_Error;
     maintains to support libdwarf calls.
 */
 typedef struct Dwarf_Debug_s*      Dwarf_Debug;
+/*! @typedef Dwarf_Section
+    An open Dwarf_Section points to data that libdwarf
+    maintains to record object section data.
+*/
+typedef struct Dwarf_Section_s*    Dwarf_Section;
 
 /*! @typedef Dwarf_Die
     Used to reference a DWARF Debugging Information Entry.
@@ -788,11 +807,46 @@ struct Dwarf_Obj_Access_Section_a_s {
     Dwarf_Unsigned as_entrysize;
 };
 
+/*! @enum Dwarf_Sec_Alloc_Pref
+
+    @since{0.12.0}
+
+    This is part of the allowance of mmap for
+    loading sections of an object file.
+
+    The option of using mmap() only applies to
+    Elf object files in this release.
+
+    @see dwarf_set_load_preference()
+*/
+enum Dwarf_Sec_Alloc_Pref {
+    /* No dynamic allocation */
+    Dwarf_Alloc_None=0,
+    /* alternative allocations */
+    Dwarf_Alloc_Malloc=1,
+    Dwarf_Alloc_Mmap=2};
+
 /*! @struct Dwarf_Obj_Access_Methods_a_s:
+
     The functions we need to access object data
     from libdwarf are declared here.
 
+    Unless you are reading object sections with
+    your own code
+    (as in src/bin/dwarfexample/jitreader.c)
+    you will not need to fill in or use the struct.
+
+    om_relocate_a_section uses malloc/read to
+    get section contents and returns a pointer to
+    the malloc space through dw_return_data, which
+    is recorded in the applicable section data.
+
+    om_load_section_a uses either malloc/read
+    or mmap and consequently returns more data
+    as needed for eventual free() or munmap().
+
 */
+
 struct Dwarf_Obj_Access_Methods_a_s {
     int    (*om_get_section_info)(void* obj,
         Dwarf_Unsigned              section_index,
@@ -803,14 +857,31 @@ struct Dwarf_Obj_Access_Methods_a_s {
     Dwarf_Small      (*om_get_pointer_size)(void* obj);
     Dwarf_Unsigned   (*om_get_filesize)(void* obj);
     Dwarf_Unsigned   (*om_get_section_count)(void* obj);
+    /*   Always uses malloc/read */
     int              (*om_load_section)(void* obj,
-        Dwarf_Unsigned    section_index,
-        Dwarf_Small** return_data,
-        int         * error);
+        Dwarf_Unsigned dw_section_index,
+        Dwarf_Small  **dw_return_data,
+        int           *dw_error);
     int              (*om_relocate_a_section)(void* obj,
         Dwarf_Unsigned  section_index,
         Dwarf_Debug dbg,
         int       * error);
+    /*  Added in 0.12.0 to allow mmap in section loading.
+        If you are just using malloc for section loading
+        and referring to this struct in your code
+        you should leave this function pointer NULL (zero). */
+    int              (*om_load_section_a)(void* obj,
+        Dwarf_Unsigned             dw_section_index,
+        /*  dw_alloc_pref is input preference and also
+            output with the actual alloced type */
+        enum Dwarf_Sec_Alloc_Pref *dw_alloc_pref,
+        Dwarf_Small              **dw_return_data_ptr,
+        Dwarf_Unsigned            *dw_return_data_len,
+        Dwarf_Small              **dw_return_mmap_base_ptr,
+        Dwarf_Unsigned            *dw_return_mmap_offset,
+        Dwarf_Unsigned            *dw_return_mmap_len,
+        int                       *dw_error);
+    void             (*om_finish)(void * obj);
 };
 struct Dwarf_Obj_Access_Interface_a_s {
     void*                             ai_object;
@@ -898,7 +969,7 @@ typedef struct Dwarf_Rnglists_Head_s * Dwarf_Rnglists_Head;
 #define DW_EXPR_VAL_OFFSET     1
 #define DW_EXPR_EXPRESSION     2
 #define DW_EXPR_VAL_EXPRESSION 3
-/*! @} */
+/*! @} endgroup framedefines*/
 
 /*! @defgroup dwdla DW_DLA alloc/dealloc typename&number
     @{
@@ -957,7 +1028,7 @@ typedef struct Dwarf_Rnglists_Head_s * Dwarf_Rnglists_Head;
 #define DW_DLA_STR_OFFSETS     0x40
 /* struct Dwarf_Debug_Addr_Table_s */
 #define DW_DLA_DEBUG_ADDR      0x41
-/*! @} */
+/*! @} endgroup dwdla */
 
 /*! @defgroup dwdle DW_DLE Dwarf_Error numbers
     @{
@@ -1479,11 +1550,22 @@ typedef struct Dwarf_Rnglists_Head_s * Dwarf_Rnglists_Head;
 #define DW_DLE_PE_SECTION_SIZE_HEURISTIC_FAIL  504
 #define DW_DLE_LLE_ERROR                       505
 #define DW_DLE_RLE_ERROR                       506
+#define DW_DLE_MACHO_SEGMENT_COUNT_HEURISTIC_FAIL 507
+#define DW_DLE_DUPLICATE_NOTE_GNU_BUILD_ID     508
+#define DW_DLE_SYSCONF_VALUE_UNUSABLE          509
+#define DW_DLE_FRAME_ITERATOR_ERR              510
+#define DW_DLE_FRAME_FDE_TABLE_ERR             511
+#define DW_DLE_COMPRESSED_FORMAT_ODD           512
+#define DW_DLE_COMPRESSED_FORMAT_UNKNOWN       513
+#define DW_DLE_ALLOC_DECOMPRESS_FAIL           514
+#define DW_DLE_ZSTD_DATA_ERROR                 515
+#define DW_DLE_ZLIB_ZSTD_MISSING               516
+#define DW_DLE_ELF_GRPSTRING_SECTION_ERROR     517
 
 /*! @note DW_DLE_LAST MUST EQUAL LAST ERROR NUMBER */
-#define DW_DLE_LAST        506
+#define DW_DLE_LAST        517
 #define DW_DLE_LO_USER     0x10000
-/*! @} */
+/*! @} endgroup dw_dle */
 
 /*! @section initfinish Initialization And Finish Operations */
 
@@ -1509,9 +1591,9 @@ typedef struct Dwarf_Rnglists_Head_s * Dwarf_Rnglists_Head;
     The returned string will be null-terminated.
     The path actually used is copied to true_path_out.
     If true_path_buffer len is zero or true_path_out_buffer
-    is zero  then the Special MacOS processing will not
+    is zero  then the Special Macos processing will not
     occur, nor will the GNU_debuglink processing occur.
-    In case GNU debuglink data was followed or MacOS
+    In case GNU debuglink data was followed or Macos
     dSYM applies the true_path_out
     will not match path and the initial byte will be
     non-null.
@@ -1739,16 +1821,19 @@ DW_API int dwarf_finish(Dwarf_Debug dw_dbg);
     call dwarf_dealloc_error even though
     the returned Dwarf_Debug is NULL.
 
-    @see jitreader
+    Since libdwarf is not reading the object directly
+    in this case it us up to the code actually reading
+    the object to check the object file for format and
+    do sufficient format-specific checks for correctness
+    and return DW_DLV_ERROR if object checks fail.
 
-    and  @see dw_noobject Reading DWARF not in object file
+    @see userobjread
+    src/bin/dwarfexample/jitreader.c
 
     @param dw_obj
     A data structure filled out by the caller so libdwarf
     can access DWARF data not in a supported object file format.
     @param dw_errhand
-    Pass in NULL normally.
-    @param dw_errarg
     Pass in NULL normally.
     @param dw_groupnumber
     The value passed in should be DW_GROUPNUMBER_ANY
@@ -1843,7 +1928,7 @@ DW_API int dwarf_set_tied_dbg(Dwarf_Debug dw_split_dbg,
     On success returns the applicable tied-Dwarf_Debug
     through the pointer.
     If dw_dbg is a tied-Dwarf_Debug  the function returns
-    null(0) through the poiner.
+    null(0) through the pointer.
     If there is no tied-Dwarf_Debug (meaning there is
     just a main-Dwarf_Debug) the function returns
     null (0) through the pointer.
@@ -1858,8 +1943,8 @@ DW_API int dwarf_set_tied_dbg(Dwarf_Debug dw_split_dbg,
 DW_API int dwarf_get_tied_dbg(Dwarf_Debug dw_dbg,
     Dwarf_Debug * dw_tieddbg_out,
     Dwarf_Error * dw_error);
-/*! @}
-*/
+/*! @} endgroup initfunctions */
+
 /*! @defgroup compilationunit Compilation Unit (CU) Access
 
     @{
@@ -1867,11 +1952,6 @@ DW_API int dwarf_get_tied_dbg(Dwarf_Debug dw_dbg,
 /*! @brief Return information on the next CU header(e).
 
     New in v0.9.0 November 2023.
-
-    The library keeps track of where it is in the object file
-    and it knows where to find 'next'.
-
-    It returns the CU_DIE pointer through dw_cu_die;
 
     dwarf_next_cu_header_e() is preferred over
     dwarf_next_cu_header_d() as the latter requires
@@ -1959,10 +2039,16 @@ DW_API int dwarf_next_cu_header_e(Dwarf_Debug dw_dbg,
     libdwarf v0.8.0 and earlier (and it also works
     for later versions).
 
-    This version will eventually be deprecated.
+    Replace all uses of dwarf_next_cu_header_d()
+    and use dwarf_next_cu_header_e instead.
+
+    Assuming you continue to use dwarf_next_cu_header_d()
+    read the following carefully.
 
     The library keeps track of where it is in the object file
-    and it knows where to find 'next'.
+    following a call to dwarf_next_cu_header_d()
+    and it knows (see next paragraph) how to
+    interpret dwarf_siblingof_b(dw_dbg,NULL,dw_is_info, &cu_die,...).
 
     In order to read the DIE tree of the CU this
     records information in the dw_dbg data and
@@ -1980,7 +2066,8 @@ DW_API int dwarf_next_cu_header_e(Dwarf_Debug dw_dbg,
     @see examplecuhdrd
 
     All arguments are the same as dwarf_next_cu_header_e()
-    except that there is no dw_cu_die argument here.
+    except that there is no dw_cu_die argument in
+    dwarf_next_cu_header_d().
 */
 
 DW_API int dwarf_next_cu_header_d(Dwarf_Debug dw_dbg,
@@ -2237,7 +2324,7 @@ DW_API int dwarf_find_die_given_sig8(Dwarf_Debug dw_dbg,
     Otherwise it means the DIE is in .debug_types.
 */
 DW_API Dwarf_Bool dwarf_get_die_infotypes_flag(Dwarf_Die dw_die);
-/*! @} */
+/*! @} endgroup compilationunit */
 
 /*! @defgroup dieentry Debugging Information Entry (DIE) content
     @{
@@ -2689,6 +2776,12 @@ DW_API int dwarf_die_offsets(Dwarf_Die dw_die,
     @param dw_offset_size
     Returns the offset_size (4 or 8) of the CU
     this DIE is contained in.
+    @return
+    On success, returns DW_DLV_OK.
+    If dw_die is null or its contents are
+    corrupted returns DW_DLV_ERROR and there
+    is nothing useful returned.
+    Never returns DW_DLV_NO_ENTRY.
 */
 DW_API int dwarf_get_version_of_die(Dwarf_Die dw_die,
     Dwarf_Half * dw_version,
@@ -2835,12 +2928,24 @@ DW_API int dwarf_bitoffset(Dwarf_Die dw_die,
 
 /*! @brief Return the value of the DW_AT_language attribute.
 
+    Returns DWARF5 DW_LANG language name.
+    The DW_LANG value returned lets one access
+    the LANG name as a string with dwarf_get_LANG_name()
+
+    To access DW_LNAME names (in DWARF5 or later)
+    see dwarf_srclanglname().
+    To get the DW_LNAME as a string, call
+    dwarf_get_LNAME_name().
+
+    DWARF5 and earlier
+
     The DIE should be a CU DIE.
     @param dw_die
     The DIE of interest.
     @param dw_returned_lang
     On success returns the language code (normally
     only found on a CU DIE). For example DW_LANG_C
+    (0x0002).
     @param dw_error
     The usual error detail return pointer.
     @return
@@ -2849,6 +2954,220 @@ DW_API int dwarf_bitoffset(Dwarf_Die dw_die,
 DW_API int dwarf_srclang(Dwarf_Die dw_die,
     Dwarf_Unsigned * dw_returned_lang,
     Dwarf_Error    * dw_error);
+
+/*! @brief Return the value of the DW_AT_language_name attribute.
+
+    New in v2.1.0 July 2025.
+
+    Returns a DWARF6  DW_AT language_name name.
+    The DW_LNAME value returned lets one access
+    the LNAME name as a string with dwarf_get_LNAME_name()
+    Also see dwarf_language_version_data()
+    for valued based on  DW_LNAME names.
+
+    To access DW_LANG names (in DWARF5 or earlier)
+    see dwarf_srclang().
+
+    @param dw_die
+    The DIE of interest, normally a CU_DIE.
+    @param dw_returned_lname
+    On success returns the language name (code) (normally
+    only found on a CU DIE). For example DW_LNAME_C
+    (0x0003).
+    @param dw_error
+    The usual error detail return pointer.
+    @return
+    Returns DW_DLV_OK etc.
+*/
+DW_API int dwarf_srclanglname(Dwarf_Die dw_die,
+    Dwarf_Unsigned *dw_returned_lname,
+    Dwarf_Error    *dw_error);
+
+/*! @brief Return the value of the DW_AT_language_version attribute.
+
+    New in v2.1.0 July 2025.
+
+    Finds the DW_AT_language_version of the DIE
+    if one is present.
+
+    The DIE should be a CU DIE.
+    @param dw_die
+    The DIE of interest.
+    @param dw_returned verstring
+    On success returns the language version
+    string from a DW_AT_language_version
+    attributes (normally
+    only found on a CU DIE). For example DW_LNAME_C
+    would return a pointer to "YYYYMM"
+    Never free or dealloc the string returned
+    through dw_returned_verstring, it is in static memory.
+    @param dw_error
+    The usual error detail return pointer.
+    @return
+    Returns DW_DLV_OK etc.
+*/
+
+DW_API int dwarf_srclanglname_version(Dwarf_Die dw_die,
+    const char  *dw_returned_verstring,
+    Dwarf_Error *dw_error);
+
+/*! @brief Return values associated with DW_AT_language_name
+
+    Returns the value of a the default-lower-bound
+    and a string defining the interpretation of
+    the DWARF6 version from the DW_AT_language_version attribute.
+    Replaces dwarf_language_version_string().
+
+    @param dw_lname_name
+    Pass in a DW_LNAME value, for example DW_LNAME_C
+    (0x0003).
+    @param dw_default_lower_bound.
+    On success returns the language code (normally
+    only found on a CU DIE). For example DW_LNAME_C
+    has a default lower bound of zero (0) that will
+    be returned through the pointer.
+    @param dw_version_scheme
+    On success, return the version scheme,
+    For DW_LNAME_C the string returned through
+    the pointer would by "YYYYMM".
+    If there is no version scheme defined, return a NULL
+    through the pointer.
+    Never dealloc or free() the string returned through
+    dw_version_scheme as it is a static constant string.
+    @return
+    Returns DW_DLV_OK or the dw_lang_name
+    is unknown, returns  DW_DLV_NO_ENTRY.
+    Never returns DW_DLV_ERROR;
+*/
+DW_API int dwarf_language_version_data(
+    Dwarf_Unsigned dw_lname_name,
+    int          *dw_default_lower_bound,
+    const char   **dw_version_string);
+
+/*! @brief dwarf_language_version_string is obsolete.
+
+    OBSOLETE NAME. Do Not use dwarf_language_version_string()
+    use dwarf_language_version_data().
+*/
+DW_API int dwarf_language_version_string(
+    Dwarf_Unsigned dw_lname_name,
+    int           *dw_default_lower_bound,
+    const char   **dw_version_string);
+
+/*! @brief Return language version name
+
+    New in version 2.2.0 July 2025
+
+    Returns the value of a the name of the DWARF6
+    DW_AT_language_version as a string, as "C++98" for example.
+    And the string defining the format of the language version,
+    for example 'YYYYMM" if  DW_LNAME_C.
+    Never free or dealloc the returned string, it is static memory
+
+    @param dw_lv_lang
+    Pass in a DW_LNAME value, for example DW_LNAME_C
+    (0x0003).
+    @param Pass in the language version, for example
+    201103 (meeaning C++ 11).
+    @param dw_ret_version_name
+    On success, return the name of the version,
+    "C++11" for example. Never free or dealloc the string.
+    @param dw_reg_version_scheme
+    On success, returns
+    For DW_LNAME_C the string returned through
+    the pointer would be "YYYYMM".
+    If there is no version scheme defined, return a NULL
+    through the pointer.
+    Never dealloc or free() the string returned through
+    dw_version_scheme as it is a static constant string.
+    @return
+    Returns DW_DLV_OK or the dw_lang_name
+    is unknown, returns  DW_DLV_NO_ENTRY.
+    Never returns DW_DLV_ERROR;
+*/
+DW_API int dwarf_lvn_name_direct(Dwarf_Unsigned dw_lv_lang,
+    Dwarf_Unsigned dw_lv_ver,
+    const char   **dw_ret_version_name,
+    const char   **dw_ret_version_scheme);
+
+/*! @brief Return values associated with DW_AT_language_version
+
+    New in version 2.2.0 July 2025
+
+    Given any valid DIE for a Compilation Unit
+    returns the value of a the CU_DIE name of the DWARF6
+    DW_AT_language_version as a string, as "C++98" for example.
+    And the string defining the format of the language version,
+    for example 'YYYYMM" if  DW_LNAME_C.
+    Never free or dealloc the returned string, it is static memory
+
+    @param dw_die
+    Pass in any valid open Dwarf_Die for the compilation
+    unit of interest.
+    @param dw_reg_version_name
+    On success returns the language version name string through
+    the pointer. Never dealloc or free the string,
+    it points to static memory.
+    @param dw_ret_version_scheme
+    On success, return the version scheme,
+    For DW_LNAME_C the string returned through
+    the pointer would by "YYYYMM".
+    If there is no version scheme defined, return a NULL
+    through the pointer.
+    Never dealloc or free() the string returned through
+    dw_version_scheme as it is a static constant string.
+    @return
+    Returns DW_DLV_OK or the dw_lang_name
+    is unknown, returns  DW_DLV_NO_ENTRY.
+    Never returns DW_DLV_ERROR;
+*/
+
+DW_API int dwarf_lvn_name(Dwarf_Die dw_die,
+    const char   **dw_ret_version_name,
+    const char   **dw_ret_version_scheme);
+
+/*! @brief Return values from the DWARF6 language version standard
+
+    New in version 2.2.0 July 2025
+
+    Primarily used by dwarfdump. This enables access to the
+    instances of DWARF6 language version table known
+    to this version of libdwarf.
+    None of the strings returned through pointers should
+    be dealloc-d or free-d, they are static strings.
+
+    @param dw_lvn_index
+    To see all table entries,
+    pass in the index of a table entry, beginning with
+    0, and call again with subsequent numbers until
+    the function returns DW_DLV_NO_ENTRY (meaning
+    there are no more entries). The index has no intrinsic
+    meaning.
+    @param dw_lvn_language_name
+    On success, the function returns the language name
+    through the pointer. For example, a value like
+    DW_LNAME_C.
+    @param dw_lvn_language_version
+    On success, the function returns the language version
+    through the pointer. For example a number such as
+    for C: 199901.
+    @param dw_lvn_language_version_scheme
+    On success, the function returns a pointer to a string
+    identifying the format of the language version
+    through the pointer. For example "YYYYMM"
+    for C.
+    @param dw_lvn_language_version_name
+    On success, the function returns a pointer to a string
+    for C.  identifying the name of the language version
+    through the pointer. For example: "C99".
+    @return
+
+*/
+DW_API int dwarf_lvn_table_entry(Dwarf_Unsigned dw_lvn_index,
+    Dwarf_Unsigned *dw_lvn_language_name,
+    Dwarf_Unsigned *dw_lvn_language_version,
+    const char    **dw_lvn_language_version_scheme,
+    const char    **dw_lvn_language_version_name);
 
 /*! @brief Return the value of the DW_AT_ordering attribute.
 
@@ -2865,7 +3184,7 @@ DW_API int dwarf_srclang(Dwarf_Die dw_die,
 DW_API int dwarf_arrayorder(Dwarf_Die dw_die,
     Dwarf_Unsigned * dw_returned_order,
     Dwarf_Error*     dw_error);
-/*! @} */
+/*! @} endgroup dieentry */
 
 /*! @defgroup attrform DIE Attribute and Attribute-Form Details
     @{
@@ -3255,12 +3574,14 @@ DW_API int dwarf_formblock(Dwarf_Attribute dw_attr,
     @param dw_attr
     The Dwarf_Attribute of interest.
     @param dw_returned_string
-    Puts a pointer to a string in the DWARF information
-    if the FORM of the attribute is some sort of string FORM.
+    On success puts a pointer to a string existing in
+    an appropriate DWARF section into dw_returned_string.
+    Never free() or dealloc the returned string.
     @param dw_error
     The usual error pointer.
     @return
     DW_DLV_OK if it succeeds.
+
 */
 DW_API int dwarf_formstring(Dwarf_Attribute dw_attr,
     char   **        dw_returned_string,
@@ -3485,7 +3806,7 @@ DW_API int dwarf_discr_entry_s(Dwarf_Dsc_Head dw_dsc,
     Dwarf_Signed   * dw_out_discr_high,
     Dwarf_Error    * dw_error);
 
-/*! @} */
+/*! @} endgroup attrform */
 
 /*! @defgroup linetable Line Table For a CU
     @{
@@ -3531,7 +3852,7 @@ DW_API int dwarf_discr_entry_s(Dwarf_Dsc_Head dw_dsc,
 
     -#  The file number denotes a name in the line table header.
     -#  If the name is not a full path (i.e. not starting
-        with / in posix/linux/MacOS) then prepend the appropriate
+        with / in posix/linux/Macos) then prepend the appropriate
         directory string from the line table header.
     -#  If the name is still not a full path then prepend
         the content of the DW_AT_comp_dir attribute
@@ -4049,14 +4370,21 @@ DW_API int dwarf_lineoff_b(Dwarf_Line dw_line,
     The Dwarf_Line of interest.
     @param dw_returned_name
     On success it reads the file register and finds
-    the source file name from the line table header
-    and returns a pointer to that file name string
+    constructs a file name from a directory and
+    filename there and
+    and returns a pointer to that string
     through the pointer.
+    It is necessary to deallocthe returned string
+    with
+    `dwarf_dealloc(dbg, lsrc_filename, DW_DLA_STRING);`
+    ( Older versions of this function incorrectly
+    said not to free() or dwarf_dealloc(). )
     @param dw_error
     The usual error pointer.
-    Do not dealloc or free the string.
     @return
     DW_DLV_OK if it succeeds.
+
+    @see exampled
 */
 DW_API int dwarf_linesrc(Dwarf_Line dw_line,
     char      ** dw_returned_name,
@@ -4237,7 +4565,7 @@ DW_API struct  Dwarf_Printf_Callback_Info_s
     dwarf_register_printf_callback(Dwarf_Debug dw_dbg,
     struct Dwarf_Printf_Callback_Info_s * dw_callbackinfo);
 
-/*! @} */
+/*! @} endgroup linetable */
 /*! @defgroup ranges Ranges: code addresses in DWARF3-4
 
     @{
@@ -4322,7 +4650,8 @@ DW_API void dwarf_dealloc_ranges(Dwarf_Debug dw_dbg,
 
     The function allows callers to calculate
     actual address from .debug_ranges data
-    in a simple and efficient way.
+    in a simple and efficient way by returning
+    the CU DIE ranges baseaddress.
 
     @param dw_dbg
     The Dwarf_Debug of interest.
@@ -4340,16 +4669,16 @@ DW_API void dwarf_dealloc_ranges(Dwarf_Debug dw_dbg,
     Otherwise the value FALSE will be returned through
     dw_known_base.
     @param dw_baseaddress
-    if dw_known_base is retured as TRUE then
+    if dw_known_base is returned as TRUE then
     dw_baseaddress will be set with the correct pc value.
     Otherwise zero will be set through dw_baseaddress.
     @param dw_at_ranges_offset_present
-    Set to 1 (TRUE) if the dw_die has the attribute
-    DW_AT_ranges, otherwise set to zero (FALSE).
+    Set to 1 (TRUE) if dw_die has the attribute DW_AT_ranges.
     @param dw_at_ranges_offset
-    Set to the value of dw_die DW_AT_ranges attribute
-    of dw_die if and only iff
-    dw_at_ranges_offset_present was set to 1.
+    Set to the value of DW_AT_ranges attribute
+    of dw_die if dw_at_ranges_offset_present was set to TRUE.
+    The offset is of the beginning of the
+    .debug_ranges section range lists applying to this DIE.
     @param dw_error
     The usual error detail return pointer.
     @return
@@ -4365,7 +4694,7 @@ DW_API int dwarf_get_ranges_baseaddress(Dwarf_Debug dw_dbg,
     Dwarf_Unsigned *dw_at_ranges_offset,
     Dwarf_Error    *dw_error);
 
-/*! @} */
+/*! @} endgroup ranges */
 
 /*! @defgroup rnglists Rnglists: code addresses in DWARF5
 
@@ -4621,7 +4950,8 @@ DW_API int dwarf_get_rnglist_rle(Dwarf_Debug dw_dbg,
     Dwarf_Unsigned * dw_entry_operand1,
     Dwarf_Unsigned * dw_entry_operand2,
     Dwarf_Error    * dw_error);
-/*! @} */
+/*! @} endgroup rnglists */
+
 /*! @defgroup locations Locations of data: DWARF2-DWARF5
     @{
 */
@@ -5024,7 +5354,7 @@ DW_API int dwarf_get_loclist_lle( Dwarf_Debug dw_dbg,
     Dwarf_Unsigned * dw_expr_ops_offset,
     Dwarf_Small   ** dw_expr_opsdata,
     Dwarf_Error    * dw_error);
-/*! @} */
+/*! @} endgroup locations */
 
 /*! @defgroup debugaddr .debug_addr access:  DWARF5
     @{
@@ -5151,7 +5481,7 @@ DW_API int dwarf_debug_addr_by_index(Dwarf_Debug_Addr_Table dw_dat,
 DW_API void dwarf_dealloc_debug_addr_table(
     Dwarf_Debug_Addr_Table dw_dat);
 
-/*! @} */
+/*! @} endgroup debugaddr */
 
 /*! @defgroup macro Macro Access: DWARF5
 
@@ -5440,7 +5770,7 @@ DW_API int dwarf_get_macro_import(
     Dwarf_Unsigned   dw_op_number,
     Dwarf_Unsigned * dw_target_offset,
     Dwarf_Error    * dw_error);
-/*! @} */
+/*! @} endgroup macro */
 
 /*! @defgroup macinfo Macro Access: DWARF2-4
 
@@ -5502,7 +5832,7 @@ DW_API int dwarf_get_macro_details(Dwarf_Debug dw_dbg,
     Dwarf_Macro_Details ** dw_details,
     Dwarf_Error *          dw_error);
 
-/*! @} */
+/*! @} endgroup macinfo */
 
 /*! @defgroup frame Stack Frame Access
 
@@ -5519,6 +5849,7 @@ DW_API int dwarf_get_macro_details(Dwarf_Debug dw_dbg,
     See DWARF5 Section 6.4 Call Frame Information,
     page 171.
 
+    see doc/checkexamples.c exampleq()
     @see exampleq
 
     The FDE array returned through dw_fde_data
@@ -5736,17 +6067,88 @@ DW_API int dwarf_get_fde_instr_bytes(Dwarf_Fde dw_fde,
     Dwarf_Unsigned * dw_outlen,
     Dwarf_Error    * dw_error);
 
+/*! @typedef dwarf_iterate_fde_callback_function_type
+
+    Used as a function pointer to a user-written
+    callback function. This provides the register
+    table for a row address.
+    See dwarf_iterate_fde_all_regs3().
+    @param dw_reg_table
+    The register table for address data.
+    @param dw_row_pc
+    The address for the row the callback is reportinf.
+    @param dw_has_more_rows
+    If non-zero means there are more rows in the current FDE.
+    @param dw_subsequent_pc
+    The pc address of the next row in the current FDE.
+    @param dw_user_data
+    Passes your callback a pointer to space you allocated
+    @return
+    Return DW_DLV_OK if the data is valid.
+    If a serious error of some kind return DW_DLV_ERROR.
+*/
+typedef int (*dwarf_iterate_fde_callback_function_type) (
+    Dwarf_Regtable3* dw_reg_table,
+    Dwarf_Addr dw_row_pc,
+    Dwarf_Bool dw_has_more_rows,
+    Dwarf_Addr dw_subsequent_pc,
+    void * dw_user_data);
+
+/*! @brief Iterate all rows for a given FDE.
+    Iinvokes a provided callback function for each row.
+    Iteration continues until all rows have been visited.
+
+    This is much more efficient than repeatedly calling
+    dwarf_get_fde_info_for_all_regs3_b() when you need
+    to extract all rows of an FDE.
+    See dwarfexample/frame2.c for an example of
+    its use.
+
+    @param dw_fde
+    Pass in the FDE of interest.
+    @param dw_reg_table
+    Pass in the address of a struct to be
+    filled in and returned via
+    the callback with fde row data for the current row.
+    The struct should be all zeros. The
+    array of struct Dwarf_Regtable_Entry3_s for
+    register rules in the struct must have been allocated
+    and initialized with all zero bits.
+    @param dw_callback
+    The callback that should b invoked for each row
+    in the FDE. The register table of size
+    @dw_reg_table_size is passed to the callback.
+    @param dw_callback_user_data
+    User data that is passed to the callback
+    @param dw_error
+    The usual error detail return pointer.
+    @return
+    Returns DW_DLV_OK if iterations all succeeded
+*/
+DW_API int dwarf_iterate_fde_all_regs3(
+    Dwarf_Fde        dw_fde,
+    Dwarf_Regtable3 *dw_reg_table,
+    dwarf_iterate_fde_callback_function_type dw_callback,
+    void            *dw_callback_user_data,
+    Dwarf_Error     *dw_error);
+
 /*! @brief Return information on frame registers at a given pc value
 
     An FDE at a given pc (code address)
     This function is new in October 2023 version 0.9.0.
+    See libdwarf.h for the required condition of
+    dw_reg_table pointer passed in.
 
     @param dw_fde
     Pass in the FDE of interest.
     @param dw_pc_requested
     Pass in a pc (code) address inside that FDE.
     @param dw_reg_table
-    On success, returns a pointer to a struct
+    Pass in the address of a Dwarf_Regtable3 struct
+    which has been initialized with zero bits, and
+    for which the dw_rt3_rules array has been
+    allocated and the initialized with all zero bits.
+    On success, returns a filled in dw_reg_table
     given the frame state.
     @param dw_row_pc
     On success returns the address of the row of
@@ -5766,9 +6168,9 @@ DW_API int dwarf_get_fde_instr_bytes(Dwarf_Fde dw_fde,
     Returns DW_DLV_OK if the dw_pc_requested is in the
     FDE passed in and there is some applicable row
     in the table.
-
 */
-DW_API int dwarf_get_fde_info_for_all_regs3_b(Dwarf_Fde dw_fde,
+DW_API int dwarf_get_fde_info_for_all_regs3_b(
+    Dwarf_Fde        dw_fde,
     Dwarf_Addr       dw_pc_requested,
     Dwarf_Regtable3* dw_reg_table,
     Dwarf_Addr*      dw_row_pc,
@@ -5779,11 +6181,14 @@ DW_API int dwarf_get_fde_info_for_all_regs3_b(Dwarf_Fde dw_fde,
 /*! @brief @brief Return information on frame registers at a given pc value
 
     Identical to dwarf_get_fde_info_for_all_regs3_b() except that
-    this doesn't output dw_has_more_rows and dw_subsequent_pc.
+    this doesn't output dw_has_more_rows and dw_subsequent_pc,
+    so dwarf_get_fde_info_for_all_regs3_b() is a better choice.
 
     If you need to iterate through all rows of the FDE, consider
-    switching to dwarf_get_fde_info_for_all_regs3_b() as it is more
-    efficient.
+    switching to dwarf_get_fde_info_for_all_regs3_b() or
+    dwarf_iterate_fde_all_regs3().
+    .
+
 */
 DW_API int dwarf_get_fde_info_for_all_regs3(Dwarf_Fde dw_fde,
     Dwarf_Addr       dw_pc_requested,
@@ -5796,8 +6201,11 @@ DW_API int dwarf_get_fde_info_for_all_regs3(Dwarf_Fde dw_fde,
 
     It is efficient to iterate across all table_columns (registers)
     using this function (dwarf_get_fde_info_for_reg3_c()).
-    Or one could instead call dwarf_get_fde_info_for_all_regs3()
-    and index into the table it fills in.
+
+    Or if one wants the data for all frame rows one
+    could instead call dwarf_iterate_fde_all_regs3()
+    and index into the data it fills in and returns
+    via a callback function you write.
 
     If dw_value_type == DW_EXPR_EXPRESSION or
     DW_EXPR_VALUE_EXPRESSION dw_offset
@@ -5811,11 +6219,19 @@ DW_API int dwarf_get_fde_info_for_all_regs3(Dwarf_Fde dw_fde,
     argument in  dwarf_get_fde_info_for_reg3_b().
     Both versions operate correctly.
 
+    As of  libdwarf 2.3.0 the CFA can be requested
+    with dw_table_column.  Previously the CFA was unavailable.
+    By default the cfa pseudo register number is DW_FRAME_CFA_COL
+    from dwarf.h.
+
     @param dw_fde
     Pass in the FDE of interest.
     @param dw_table_column
     Pass in the table_column, column numbers in the table
-    are 0 through the number_of_registers-1.
+    are 0 through the number_of_registers-1 and
+    the 'column' of the CFA (by default it is
+    DW_FRAME_CFA_COL, but might have been set
+    by your code using dwarf_set_frame_cfa_value()).
     @param dw_pc_requested
     Pass in the pc of interest within dw_fde.
     @param dw_value_type
@@ -6269,10 +6685,18 @@ DW_API int dwarf_cie_section_offset(Dwarf_Debug dw_dbg,
 
 /*! @brief Frame Rule Table Size
     @link frameregs Invariants for setting frame registers @endlink
+
     @param dw_dbg
     The Dwarf_Debug of interest.
+    If it is null or invalid, return the value zero
+    immediately
     @param dw_value
     Pass in the value to record for the library to use.
+    If zero, the Frame Rule Table Size is left unchanged.
+    The library someone arbitrarily does not allow
+    setting the number of register rules (registers)
+    below 188 (DW_FRAME_HIGHEST_NORMAL_REGISTER in dwarf.h)
+    and does not apply any dw_value lower than that.
     @return
     Returns the previous value.
 */
@@ -6285,6 +6709,8 @@ DW_API Dwarf_Half dwarf_set_frame_rule_table_size(
 
     @param dw_dbg
     The Dwarf_Debug of interest.
+    If it is null or invalid, return the value zero
+    immediately.
     @param dw_value
     Pass in the value to record for the library to use.
     @return
@@ -6297,6 +6723,8 @@ DW_API Dwarf_Half dwarf_set_frame_rule_initial_value(
     @link frameregs Invariants for setting frame registers @endlink
     @param dw_dbg
     The Dwarf_Debug of interest.
+    If it is null or invalid, return the value zero
+    immediately.
     @param dw_value
     Pass in the value to record for the library to use.
     @return
@@ -6310,6 +6738,8 @@ DW_API Dwarf_Half dwarf_set_frame_cfa_value(
     @link frameregs Invariants for setting frame registers @endlink
     @param dw_dbg
     The Dwarf_Debug of interest.
+    If it is null or invalid, return the value zero
+    immediately.
     @param dw_value
     Pass in the value to record for the library to use.
     @return
@@ -6322,6 +6752,8 @@ DW_API Dwarf_Half dwarf_set_frame_same_value(
     @link frameregs Invariants for setting frame registers @endlink
     @param dw_dbg
     The Dwarf_Debug of interest.
+    If it is null or invalid, return the value zero
+    immediately.
     @param dw_value
     Pass in the value to record for the library to use.
     @return
@@ -6330,7 +6762,7 @@ DW_API Dwarf_Half dwarf_set_frame_same_value(
 DW_API Dwarf_Half dwarf_set_frame_undefined_value(
     Dwarf_Debug dw_dbg,
     Dwarf_Half  dw_value);
-/*! @} */
+/*! @} endgroup frame */
 
 /*! @defgroup abbrev Abbreviations Section Details
 
@@ -6356,7 +6788,7 @@ DW_API Dwarf_Half dwarf_set_frame_undefined_value(
     When libdwarf itself reads abbreviations  to
     access DIEs the offset comes
     from the Compilation Unit Header debug_abbrev_offset field.
-    @see dwarf_next_cu_header_d
+    @see dwarf_next_cu_header_e
 
     @param dw_dbg
     The Dwarf_Debug of interest.
@@ -6481,7 +6913,7 @@ DW_API int dwarf_get_abbrev_entry_b(Dwarf_Abbrev dw_abbrev,
     Dwarf_Off      * dw_offset,
     Dwarf_Error    * dw_error);
 
-/*! @} */
+/*! @} endgroup abbrev */
 /*! @defgroup string String Section .debug_str Details
 
     @{
@@ -6520,7 +6952,7 @@ DW_API int dwarf_get_str(Dwarf_Debug dw_dbg,
     Dwarf_Signed *   dw_strlen_of_string,
     Dwarf_Error*     dw_error);
 
-/*! @} */
+/*! @} endgroup string */
 /*! @defgroup str_offsets Str_Offsets section details
 
     @{
@@ -6679,7 +7111,7 @@ DW_API int dwarf_str_offsets_statistics(
     Dwarf_Unsigned * dw_table_count,
     Dwarf_Error    * dw_error);
 
-/*! @} */
+/*! @} endgroup str_offsets */
 /*! @defgroup dwarferror Dwarf_Error Functions
     @{
     These functions aid in understanding handling.
@@ -6733,7 +7165,7 @@ DW_API void  dwarf_error_creation(Dwarf_Debug dw_dbg ,
 */
 DW_API void dwarf_dealloc_error(Dwarf_Debug dw_dbg,
     Dwarf_Error dw_error);
-/*! @} */
+/*! @} endgroup dwarferror */
 
 /*! @defgroup dwarfdealloc Generic dwarf_dealloc Function
     @{
@@ -6776,7 +7208,7 @@ DW_API void dwarf_dealloc_error(Dwarf_Debug dw_dbg,
 */
 DW_API void dwarf_dealloc(Dwarf_Debug dw_dbg,
     void* dw_space, Dwarf_Unsigned dw_type);
-/*! @} */
+/*! @} endgroup dwarfdealloc */
 /*! @defgroup debugsup Access to Section .debug_sup
     @{
 */
@@ -6802,7 +7234,7 @@ DW_API int dwarf_get_debug_sup(Dwarf_Debug dw_dbg,
     Dwarf_Unsigned * dw_checksum_len,
     Dwarf_Small   ** dw_checksum,
     Dwarf_Error    * dw_error);
-/*! @} */
+/*! @} endgroup debugsup */
 
 /*! @defgroup debugnames Fast Access to .debug_names DWARF5
     @{
@@ -7210,7 +7642,7 @@ DW_API int dwarf_dnames_entrypool_values(Dwarf_Dnames_Head dw_dn,
     Dwarf_Unsigned *dw_offset_of_next_entrypool,
     Dwarf_Error    *dw_error);
 
-/*! @} */
+/*! @} endgroup debugnames */
 
 /*! @defgroup aranges Fast Access to a CU given a code address
     @{
@@ -7330,10 +7762,9 @@ DW_API int dwarf_get_arange_info_b(Dwarf_Arange dw_arange,
     Dwarf_Unsigned*  dw_length,
     Dwarf_Off     *  dw_cu_die_offset,
     Dwarf_Error   *  dw_error );
-/*! @} */
+/*! @} endgroup aranges */
 
 /*! @defgroup pubnames Fast Access to .debug_pubnames and more.
-
     @{
     @link dwsec_pubnames Pubnames and Pubtypes overview @endlink
 
@@ -7420,7 +7851,7 @@ DW_API int dwarf_get_pubtypes(Dwarf_Debug dw_dbg,
 
 /*! @brief Allocate Any Fast Access DWARF2-DWARF4
 
-    This interface new in 0.6.0. Simplfies access
+    This interface new in 0.6.0. Simplifies access
     by replace dwarf_get_pubtypes, dwarf_get_funcs,
     dwarf_get_types, dwarfget_vars, and dwarf_get_weaks
     with a single set of types.
@@ -7596,7 +8027,7 @@ DW_API int dwarf_get_globals_header(Dwarf_Global dw_global,
 DW_API int dwarf_return_empty_pubnames(Dwarf_Debug dw_dbg,
     int          dw_flag);
 
-/*! @} */
+/*! @} endgroup pubnames */
 
 /*! @defgroup gnupubnames Fast Access to GNU .debug_gnu_pubnames
     @{
@@ -7731,7 +8162,7 @@ DW_API int dwarf_get_gnu_index_block_entry(
     unsigned char   *dw_typeofentry,
     Dwarf_Error     *dw_error);
 
-/*! @} */
+/*! @} endgroup gpubnames */
 
 /*! @defgroup gdbindex Fast Access to Gdb Index
 
@@ -8081,7 +8512,7 @@ DW_API int dwarf_gdbindex_string_by_offset(
     Dwarf_Unsigned   dw_stringoffset,
     const char    ** dw_string_ptr,
     Dwarf_Error   *  dw_error);
-/*! @} */
+/*! @} endgroup gdbindex */
 
 /*! @defgroup splitdwarf Fast Access to Split Dwarf (Debug Fission)
     @{
@@ -8163,7 +8594,7 @@ DW_API int dwarf_get_xu_index_section_type(
 
 /*! @brief Get a Hash Entry
 
-    @see examplez/x
+    @see examplez
 
     @param dw_xuhdr
     Pass in an open header pointer.
@@ -8314,12 +8745,12 @@ DW_API int dwarf_get_debugfission_for_key(Dwarf_Debug dw_dbg,
 /*  END debugfission dwp .debug_cu_index
     and .debug_tu_index meaningful operations. */
 
-/*! @} */
+/*! @} endgroup splitdwarf */
 
 /*! @defgroup gnudebuglink Access GNU .gnu_debuglink, build-id.
 
     @{
-    When DWARF sections are in a differenct object
+    When DWARF sections are in a different object
     than the executable or a normal shared object.
     The special GNU section provides a way to name
     the object file with DWARF.
@@ -8533,7 +8964,7 @@ DW_API int dwarf_crc32(Dwarf_Debug dw_dbg,
 DW_API unsigned int dwarf_basic_crc32(const unsigned char * dw_buf,
     unsigned long dw_len,
     unsigned int  dw_init);
-/*! @} */
+/*! @} endgroup gnudebuglink */
 
 /*! @defgroup harmless Harmless Error recording
 
@@ -8624,6 +9055,26 @@ DW_API unsigned int dwarf_set_harmless_error_list_size(
     Dwarf_Debug  dw_dbg,
     unsigned int dw_maxcount);
 
+/*!  @brief Enable or disable libdwarf tracking
+    of harmless errors. Harmless errors are
+    used by tools like dwarfdump. Disabling
+    harmless errors can improve performance by
+    avoiding string copies.
+    Defaults to enabled.
+
+    @param dw_dbg
+    Pass in an open Dwarf_Debug
+    @param dw_v
+    If zero passed in, harmless errors will not
+    be tracked and libdwarf will run somewhat faster
+    If non-zero passed in libdwarf will resume or
+    continue tracking harmless errors
+    @return
+    Returns the previous version of the flag.
+*/
+DW_API int dwarf_set_harmless_errors_enabled(Dwarf_Debug dw_dbg,
+    int dw_v);
+
 /*! @brief Harmless Error Insertion is only for testing
 
     Useful for testing the harmless error mechanism.
@@ -8637,7 +9088,7 @@ DW_API unsigned int dwarf_set_harmless_error_list_size(
 */
 DW_API void dwarf_insert_harmless_error(Dwarf_Debug dw_dbg,
     char * dw_newerror);
-/*! @} */
+/*! @} endgroup harmless */
 
 /*! @defgroup Naming Names DW_TAG_member etc as strings
 
@@ -8653,7 +9104,7 @@ DW_API void dwarf_insert_harmless_error(Dwarf_Debug dw_dbg,
     through the pointer @b dw_s_out and the value
     returned is DW_DLV_OK.
 
-    The strings returned on sucess are in static storage
+    The strings returned on success are in static storage
     and must not be freed.
 
     These functions are generated from information
@@ -8785,6 +9236,10 @@ DW_API int dwarf_get_LLE_name(unsigned int dw_val_in,
 DW_API int dwarf_get_LLEX_name(unsigned int dw_val_in,
     const char ** dw_s_out );
 
+/*! @brief dwarf_get_LNAME
+*/
+DW_API int dwarf_get_LNAME_name(unsigned int dw_val_in,
+    const char ** dw_s_out);
 /*! @brief dwarf_get_LNCT_name
 */
 DW_API int dwarf_get_LNCT_name(unsigned int dw_val_in,
@@ -8854,7 +9309,7 @@ DW_API int dwarf_get_VIS_name(unsigned int dw_val_in,
 */
 DW_API int dwarf_get_FORM_CLASS_name(enum Dwarf_Form_Class dw_fc,
     const char ** dw_s_out);
-/*! @} */
+/*! @} endgroup Naming */
 
 /*! @defgroup objectsections Object Sections Data
     @{
@@ -8874,8 +9329,8 @@ DW_API int dwarf_get_FORM_CLASS_name(enum Dwarf_Form_Class dw_fc,
 
     For non-Elf the name reported will be as if
     it were Elf sections. For example, not the names
-    MacOS puts in its object sections (which
-    the MacOS reader translates).
+    Macos puts in its object sections (which
+    the Macos reader translates).
 
     These calls returning selected object header
     {machine architecture,flags)
@@ -9214,6 +9669,9 @@ DW_API int dwarf_get_section_info_by_index(Dwarf_Debug dw_dbg,
     have ABI-defined values which have nothing to do
     with DWARF.
 
+    This version added December 2024 with an
+    additional argument: dw_obj_type.
+
     dwarf_ub_offset, dw_ub_count, dw_ub_index only
     apply to DW_FTYPE_APPLEUNIVERSAL.
 
@@ -9242,6 +9700,12 @@ DW_API int dwarf_get_section_info_by_index(Dwarf_Debug dw_dbg,
     pointed to will be set to a value that
     the specific ABI uses for the machine-architecture
     the object file says it is for.
+    @param dw_obj_type
+    Pass in a pointer. On success the value
+    pointed to will be set to a value that
+    the specific ABI uses for the machine-architecture
+    the object file says it is for
+    (for ELF is elf header e_type).
     @param dw_obj_flags
     Pass in a pointer. On success the value
     pointed to will be set to a value that
@@ -9282,6 +9746,26 @@ DW_API int dwarf_get_section_info_by_index(Dwarf_Debug dw_dbg,
     is null or stale. Otherwise returns DW_DLV_OK
     and non-null return-value pointers will have
     meaningful data.
+
+*/
+DW_API int dwarf_machine_architecture_a(Dwarf_Debug dw_dbg,
+    Dwarf_Small    *dw_ftype,
+    Dwarf_Small    *dw_obj_pointersize,
+    Dwarf_Bool     *dw_obj_is_big_endian,
+    Dwarf_Unsigned *dw_obj_machine, /*Elf e_machine */
+    Dwarf_Unsigned *dw_obj_type, /* Elf e_type */
+    Dwarf_Unsigned *dw_obj_flags,
+    Dwarf_Small    *dw_path_source,
+    Dwarf_Unsigned *dw_ub_offset,
+    Dwarf_Unsigned *dw_ub_count,
+    Dwarf_Unsigned *dw_ub_index,
+    Dwarf_Unsigned *dw_comdat_groupnumber);
+
+/*! @brief Get basic object information original version
+
+    Identical to dwarf_machine_architecture_a()  except that
+    this older version does not have the the dw_obj_type
+    argument so it cannot return the Elf e_type value..
 
 */
 DW_API int dwarf_machine_architecture(Dwarf_Debug dw_dbg,
@@ -9351,7 +9835,7 @@ DW_API int dwarf_get_section_max_offsets_d(Dwarf_Debug dw_dbg,
     Dwarf_Unsigned * dw_debug_names_size,
     Dwarf_Unsigned * dw_debug_loclists_size,
     Dwarf_Unsigned * dw_debug_rnglists_size);
-/*! @} */
+/*! @} endgroup objectsections */
 
 /*! @defgroup secgroups Section Groups Objectfile Data
 
@@ -9442,7 +9926,7 @@ DW_API int dwarf_sec_group_map(Dwarf_Debug dw_dbg,
     Dwarf_Unsigned *dw_sec_numbers_array,
     const char    **dw_sec_names_array,
     Dwarf_Error    *dw_error);
-/*! @} */
+/*! @} endgroup secgroups */
 
 /*! @defgroup leb LEB Encode and Decode
     @{
@@ -9476,7 +9960,7 @@ DW_API int dwarf_decode_signed_leb128(char *dw_leb,
     Dwarf_Unsigned *dw_leblen,
     Dwarf_Signed   *dw_outval,
     char           *dw_endptr);
-/*! @} */
+/*! @} endgroup leb */
 
 /*! @defgroup miscellaneous Miscellaneous Functions
     @{
@@ -9601,6 +10085,36 @@ DW_API void dwarf_record_cmdline_options(
 */
 DW_API int dwarf_set_de_alloc_flag(int dw_v);
 
+/*!  @brief Eliminate libdwarf checking attribute duplication
+
+    Independent of any Dwarf_Debug, this is sets a
+    global flag in libdwarf and is applicable
+    to all whenever the setting is changed.
+    Defaults to zero so by default libdwarf does check
+    every set of abbreviations for duplicate attributes.
+
+    DWARF5 Sec 2.2 Attribute Types
+    Each attribute value is characterized by an attribute
+    name. No more than one attribute with a given name
+    may appear in any debugging information entry.
+    Essentially the same wording is in Sec 2.2 of
+    DWARF2, DWARF3 and DWARF4.
+
+    Do not call this with non-zero dw_v unless you
+    really want the library to avoid this basic
+    DWARF-correctness check.
+
+    @since {0.12.0}
+
+    @param dw_v
+    If non-zero passed in libdwarf will avoid the checks
+    and will not return errors for an abbreviation list with
+    duplicate attributes.
+    @return
+    Returns the previous version of the flag.
+*/
+DW_API int dwarf_library_allow_dup_attr(int dw_v);
+
 /*! @brief Set the address size on a Dwarf_Debug
 
     DWARF information CUs and other
@@ -9656,8 +10170,7 @@ DW_API int dwarf_get_universalbinary_count(
     Dwarf_Unsigned *dw_current_index,
     Dwarf_Unsigned *dw_available_count);
 
-/*! @}
-*/
+/*! @} endgroup miscellaneous */
 
 /*! @defgroup objectdetector Determine Object Type of a File
     @{
@@ -9673,6 +10186,10 @@ DW_API int dwarf_get_universalbinary_count(
     DW_FTYPE_PE,
     DW_FTYPE_MACH_O, or
     DW_FTYPE_APPLEUNIVERSAL.
+
+    These are not meant to deal with a specific binary
+    inside a Macos Universal Binary (DW_FTYPE_APPLEUNIVERSAL).
+
 */
 DW_API int dwarf_object_detector_path_b(const char * dw_path,
     char           *dw_outpath_buffer,
@@ -9705,9 +10222,116 @@ DW_API int dwarf_object_detector_fd(int dw_fd,
     unsigned int   *dw_offsetsize,
     Dwarf_Unsigned *dw_filesize,
     int            *dw_errcode);
+/*! @} endgroup objectdetector */
 
-/*! @}
+/*! @defgroup sectionallocpref Section allocation: malloc or mmap
+    @{
+
+    Functions related to the choice of malloc/read
+    or mmap for object section memory allocation.
+
+    The default allocation preference is malloc().
+
+    The shell environment variable DWARF_WHICH_ALLOC
+    is also involved at runtime but it only applies
+    to reading Elf object files..
+    If the value is 'malloc' then use of read/malloc
+    is preferred.
+    If the value is 'mmap' then use of mmap is
+    preferred (Example: 'export DWARF_WHICH_ALLOC=mmap').
+    Otherwise, the environment value is checked and ignored.
+
+    If present and valid this environment variable
+    takes precedence over
+    dwarf_set_load_preference().
 */
+
+/*! @brief Set/Retrieve section allocation preference.
+
+    @since {0.12.0}
+
+    By default object file sections are loaded
+    using malloc and read (Dwarf_Alloc_Malloc).
+    This works everywhere and works well on
+    all but gigantic object files.
+
+    The preference of Dwarf_Alloc_Mmap does not guarantee mmap
+    will be used for object section data, but does
+    cause mmap() to be used when possible.
+
+    In 0.12.0 mmap() is only usable on Elf object files.
+
+    dw_load_preference is one of
+    Dwarf_Alloc_Malloc      (1)
+    Dwarf_Alloc_Mmap        (2)
+
+    Must be called before calling a dwarf_init*()
+    to be effective in a  dwarf_init*().
+    The value is remembered for subsequent dwarf_init*()
+    in the library runtime being executed.
+
+    @param dw_load_preference
+    If passed in Dwarf_Alloc_Mmap then future
+    calls to any dwarf_init*() function will use mmap
+    to load object sections if possible.
+    If passed in Dwarf_Alloc_Malloc then future
+    calls to any dwarf_init*() function will use mmap
+    to load sections.
+    Any other value passed in dw_load_preference is
+    ignored.
+    @return
+    Always returns the value before dw_load_preference
+    applied, of this runtime global preference.
+
+*/
+DW_API enum Dwarf_Sec_Alloc_Pref dwarf_set_load_preference(
+    enum Dwarf_Sec_Alloc_Pref dw_load_preference);
+
+/*! @brief Retrieve count of mmap/malloc sections
+
+    @since {0.12.0}
+
+    Note that compressed section contents will
+    be expanded into a malloc/read section
+    in all cases.
+
+    @param dw_dbg
+    A valid open Dwarf_Debug.
+    @param dw_mmap_count
+    On success the number of sections allocated
+    with mmap is returned.
+    If null passed in the argument is ignored.
+    @param dw_mmap_size
+    On success the size total in bytes of sections allocated
+    with mmap is returned.
+    If null passed in the argument is ignored.
+    @param dw_malloc_count
+    On success the number of sections read/allocated
+    with read/malloc is returned.
+    If null passed in the argument is ignored.
+    On success the number of sections allocated
+    with malloc/read is returned.
+    @param dw_malloc_size
+    On success the total size in bytes of sections
+    with malloc/read is returned.
+    If null passed in the argument is ignored.
+    On success the number of sections read/allocated
+    with read/malloc is returned.
+
+    @return
+    On success returns DW_DLV_OK and sets
+    the counts and total size through the respective
+    non-null pointer arguments.
+    If dw_dbg is invalid or NULL the function returns DW_DLV_ERROR.
+    Never returns DW_DLV_NO_ENTRY.
+
+*/
+DW_API int dwarf_get_mmap_count(Dwarf_Debug dw_dbg,
+    Dwarf_Unsigned *dw_mmap_count,
+    Dwarf_Unsigned *dw_mmap_size,
+    Dwarf_Unsigned *dw_malloc_count,
+    Dwarf_Unsigned *dw_malloc_size);
+/*! @} endgroup sectionallocpref */
 
 #ifdef __cplusplus
 }

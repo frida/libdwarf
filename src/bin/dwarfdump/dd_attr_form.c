@@ -57,7 +57,7 @@
     See also print_tag_attributes_usage.c as that is
     where tag-tag and tag-attr tree is printed. */
 
-#if 0
+#if 0 /* debugging only */
 static void
 print_3key_record(const char *msg,int num,Three_Key_Entry *e)
 {
@@ -68,10 +68,10 @@ print_3key_record(const char *msg,int num,Three_Key_Entry *e)
 }
 #endif /* 0 */
 
-void * threekey_tag_tag_base; /* tag-tree recording */
-void * threekey_tag_attr_base; /* for tag_attr recording */
+void * threekey_tag_tag_base;   /* tag-tree recording */
+void * threekey_tag_attr_base;  /* for tag_attr recording */
 void * threekey_attr_form_base; /* for attr/class/form recording */
-void * threekey_tag_use_base; /* for simple tag counting */
+void * threekey_tag_use_base;   /* for simple tag counting */
 
 int
 make_3key(Dwarf_Half k1,
@@ -336,7 +336,6 @@ check_attr_formclass_combination(Dwarf_Debug dbg,
     Dwarf_Half tag,
     Dwarf_Half attrnum,
     Dwarf_Half fc,
-    int pd_dwarf_names_print_on_error,
     int die_stack_indent_level)
 {
     const char *tagname = "<AT invalid>";
@@ -347,12 +346,10 @@ check_attr_formclass_combination(Dwarf_Debug dbg,
     } else {
         /* Report errors only if tag-attr check is on */
         if (glflags.gf_check_tag_attr) {
-            tagname = get_AT_name(attrnum,
-                pd_dwarf_names_print_on_error);
+            tagname = get_AT_name(attrnum);
             tag_specific_globals_setup(dbg,tag,
                 die_stack_indent_level);
-            formclassname = get_FORM_CLASS_name(fc,
-                pd_dwarf_names_print_on_error);
+            formclassname = get_FORM_CLASS_name(fc);
 
             DWARF_CHECK_ERROR3(attr_formclass_result,tagname,
                 formclassname,
@@ -390,7 +387,7 @@ record_attr_form_use(
 /*  SKIP_AF_CHECK defined means this is in scripts/ddbuild.sh
     and this checking makes no sense and will not compile. */
     check_attr_formclass_combination(dbg,
-        tag,attr,fclass,1,
+        tag,attr,fclass,
         die_stack_indent_level);
     res = make_3key(attr,fclass,form,0,0,1,&e);
     if (res!= DW_DLV_OK) {
@@ -448,6 +445,20 @@ qsortformclass(const void * e1in, const void * e2in)
         return -1;
     }
     if (e1->key2 > e2->key2) {
+        return 1;
+    }
+    return 0;
+}
+static int
+qsortattribute(const void * e1in, const void * e2in)
+{
+    Three_Key_Entry *e1 = (Three_Key_Entry *)e1in;
+    Three_Key_Entry *e2 = (Three_Key_Entry *)e2in;
+
+    if (e1->key1 < e2->key1) {
+        return -1;
+    }
+    if (e1->key1 > e2->key1) {
         return 1;
     }
     return 0;
@@ -599,8 +610,8 @@ print_attr_form_usage(void)
         pct = ( (float)tke->count / total)*100.0f;
         printf(localformat,
             (unsigned)i,
-            get_AT_name(tke->key1,1),
-            get_FORM_name(tke->key3,1),
+            get_AT_name(tke->key1),
+            get_FORM_name(tke->key3),
             tke->count,pct);
         localsum += tke->count;
     }
@@ -626,17 +637,21 @@ print_attr_form_usage(void)
             continue;
         }
         if (!startnoted) {
-            curform = tke->key2;
-            formtotal = tke->count;
-            startnoted = TRUE;
+            if (tke->count) {
+                curform = tke->key2;
+                formtotal = tke->count;
+                startnoted = TRUE;
+            }
             continue;
         }
         if (curform != tke->key2) {
-            pct = ( (float)formtotal / total)*100.0f;
-            printf(localformat,
-                (unsigned)j,
-                get_FORM_CLASS_name(curform,1),
-                formtotal,pct);
+            if (formtotal) {
+                pct = ( (float)formtotal / total)*100.0f;
+                printf(localformat,
+                    (unsigned)j,
+                    get_FORM_CLASS_name(curform),
+                    formtotal,pct);
+            }
             localsum += formtotal;
             curform = tke->key2;
             formtotal = tke->count;
@@ -649,7 +664,7 @@ print_attr_form_usage(void)
         pct = ( (float)formtotal / total)*100.0f;
         printf(localformat,
             (unsigned)j,
-            get_FORM_CLASS_name(curform,1),
+            get_FORM_CLASS_name(curform),
             formtotal,pct);
         localsum += formtotal;
     }
@@ -675,21 +690,25 @@ print_attr_form_usage(void)
             continue;
         }
         if (!startnoted) {
-            curform = tke->key3;
-            formtotal = tke->count;
-            startnoted = TRUE;
+            if (tke->count) {
+                curform = tke->key3;
+                formtotal = tke->count;
+                startnoted = TRUE;
+            }
             continue;
         }
         if (curform != tke->key3) {
-            pct = ( (float)formtotal / total)*100.0f;
-            printf(localformat,
-                (unsigned)j,
-                get_FORM_name(curform,1),
-                formtotal,pct);
-            localsum += formtotal;
+            if (formtotal) {
+                pct = ( (float)formtotal / total)*100.0f;
+                printf(localformat,
+                    (unsigned)j,
+                    get_FORM_name(curform),
+                    formtotal,pct);
+                localsum += formtotal;
+                ++j;
+            }
             curform = tke->key3;
             formtotal = tke->count;
-            ++j;
             continue;
         }
         formtotal += tke->count;
@@ -698,7 +717,7 @@ print_attr_form_usage(void)
         pct = ( (float)formtotal / total)*100.0f;
         printf(localformat,
             (unsigned)j,
-            get_FORM_name(curform,1),
+            get_FORM_name(curform),
             formtotal,pct);
         localsum += formtotal;
     }
@@ -709,6 +728,8 @@ print_attr_form_usage(void)
     curattr = 0;
     attrtotal = 0;
     startnoted = FALSE;
+    qsort(tk_l,recordmax,sizeof(Three_Key_Entry),
+        qsortattribute);
     printf("\n*** COUNT BY ATTRIBUTE ***\n");
     printf("[]                                   found rate\n");
     localsum = 0;
@@ -716,35 +737,39 @@ print_attr_form_usage(void)
     for (i = 0; i < recordmax; ++i) {
         Three_Key_Entry * tke = tk_l+i;
 
-        if (!tke->key3) {
+        if (!tke->key1) {
             /* Skip table building data */
             continue;
         }
         if (!startnoted) {
-            curattr = tke->key1;
-            attrtotal = tke->count;
-            startnoted = TRUE;
+            if (tke->count) {
+                curattr = tke->key1;
+                attrtotal = tke->count;
+                startnoted = TRUE;
+            }
             continue;
         }
-        if (curattr != tke->key1) {
-            pct = ( (float)attrtotal / total)*100.0f;
-            printf(localformat,
-                (unsigned)j,
-                get_AT_name(curattr,1),
-                attrtotal,pct);
-            localsum += attrtotal;
+        if ((curattr != tke->key1)) {
+            if (attrtotal) {
+                pct = ( (float)attrtotal / total)*100.0f;
+                printf(localformat,
+                    (unsigned)j,
+                    get_AT_name(curattr),
+                    attrtotal,pct);
+                ++j;
+                localsum += attrtotal;
+            }
             curattr = tke->key1;
             attrtotal = tke->count;
-            ++j;
             continue;
         }
-        formtotal += tke->count;
+        attrtotal += tke->count;
     }
     if (attrtotal) {
         pct = ( (float)attrtotal / total)*100.0f;
         printf(localformat,
             (unsigned)j,
-            get_AT_name(curattr,1),
+            get_AT_name(curattr),
             attrtotal,pct);
         localsum += attrtotal;
     }
@@ -835,11 +860,11 @@ dd_print_tag_tree_results(Dwarf_Unsigned tag_tag_count)
         if (tke->key1 != curparent) {
             printf("[ %4" DW_PR_DUu "] 0x%04x %-38s"
                 " table         count\n",
-                i,tke->key1,get_TAG_name(tke->key1,1));
+                i,tke->key1,get_TAG_name(tke->key1));
             curparent = tke->key1;
         }
         printf("        0x%04x %-38s %s  %7" DW_PR_DUu "\n",
-            tke->key2, get_TAG_name(tke->key2,1),
+            tke->key2, get_TAG_name(tke->key2),
             gettablename(tke->from_tables),
             tke->count);
     }
@@ -916,7 +941,7 @@ dd_print_tag_attr_results(Dwarf_Unsigned tag_attr_count)
         if (tke->key1 != curparent) {
             printf("[ %4" DW_PR_DUu "] 0x%04x %-38s"
                 " table      count percent\n",
-                i,tke->key1,get_TAG_name(tke->key1,1));
+                i,tke->key1,get_TAG_name(tke->key1));
             curparent = tke->key1;
         }
         switch(tke->from_tables) {
@@ -937,7 +962,7 @@ dd_print_tag_attr_results(Dwarf_Unsigned tag_attr_count)
         }
         printf("        0x%04x %-38s %s  %7" DW_PR_DUu
             " %4.1f\n",
-            tke->key2, get_AT_name(tke->key2,1),
+            tke->key2, get_AT_name(tke->key2),
             gettablename(tke->from_tables),
             tke->count,pct);
     }
@@ -950,9 +975,6 @@ dd_print_tag_attr_results(Dwarf_Unsigned tag_attr_count)
     printf("Number of unknown  table entries: %7" DW_PR_DUu "\n",
         attrs_unknown);
     free(tk_l);
-#if 0
-FIXME
-#endif
 }
 
 void
@@ -1026,7 +1048,7 @@ dd_print_tag_use_results(Dwarf_Unsigned tag_count)
         }
         printf("[ %4" DW_PR_DUu "] 0x%04x %-38s %7"
             DW_PR_DUu " %3.1f\n",
-                i,tke->key1,get_TAG_name(tke->key1,1),
+                i,tke->key1,get_TAG_name(tke->key1),
                 tke->count,pct);
     }
     free(tk_l);

@@ -58,7 +58,6 @@
 #include "libdwarf_private.h" /* For malloc/calloc debug */
 
 static const char *remove_quotes_pair(const char *text);
-static char *special_program_name(char *n);
 static void suppress_check_dwarf(void);
 
 /*  These configure items are for the
@@ -104,11 +103,13 @@ do_all(void)
     glflags.gf_types_flag =  TRUE; /* .debug_types */
     glflags.gf_line_flag = TRUE;
     glflags.gf_no_follow_debuglink = FALSE;
+    glflags.gf_no_follow_dsym = FALSE;
     glflags.gf_global_debuglink_paths = 0;
     glflags.gf_global_debuglink_count = 0;
     glflags.gf_pubnames_flag = TRUE;
     glflags.gf_macinfo_flag = TRUE;
     glflags.gf_macro_flag = TRUE;
+    glflags.gf_print_all_srcfiles = FALSE;
     glflags.gf_aranges_flag = TRUE;
     /*  Do not do
         glflags.gf_loc_flag = TRUE
@@ -203,41 +204,6 @@ remove_quotes_pair(const char *text)
         }
     }
     return p;
-}
-
-/*  By trimming a /dwarfdump.O
-    down to /dwarfdump  (keeping any prefix
-    or suffix)
-    we can avoid a sed command in
-    regressiontests/DWARFTEST.sh
-    and save 12 minutes run time of a regression
-    test.
-
-    The effect is, when nothing has changed in the
-    normal output, that the program_name matches too.
-    Because we don't want a different name of dwarfdump
-    to cause a mismatch.  */
-static char *
-special_program_name(char *n)
-{
-    char * mp = "/dwarfdump.O";
-    char * revstr = "/dwarfdump";
-    char *cp = n;
-    size_t mslenszt = strlen(mp);
-
-    for ( ; *cp; ++cp) {
-        if (*cp == *mp) {
-            if (!strncmp(cp,mp,mslenszt)){
-                esb_append(glflags.newprogname,revstr);
-                cp += mslenszt-1;
-            } else {
-                esb_appendn(glflags.newprogname,cp,1);
-            }
-        } else {
-            esb_appendn(glflags.newprogname,cp,1);
-        }
-    }
-    return esb_get_string(glflags.newprogname);
 }
 
 static void suppress_check_dwarf(void)
@@ -357,6 +323,8 @@ static void arg_format_suppress_uri(void);
 static void arg_format_suppress_uri_msg(void);
 static void arg_format_suppress_utf8(void);
 
+static void arg_print_section_allocations(void);
+static void arg_allocate_via_mmap(void);
 static void arg_format_file(void);
 static void arg_format_gcc(void);
 static void arg_format_groupnumber(void);
@@ -366,6 +334,7 @@ static void arg_format_producer(void);
 static void arg_format_snc(void);
 
 static void arg_print_all(void);
+static void arg_print_all_srcfiles(void);
 static void arg_print_abbrev(void);
 static void arg_print_aranges(void);
 static void arg_print_debug_frame(void);
@@ -377,6 +346,7 @@ static void arg_print_debug_sup(void);
 static void arg_print_fission(void);
 static void arg_print_gnu_frame(void);
 static void arg_print_info(void);
+static void arg_print_language_version_table(void);
 static void arg_print_lines(void);
 static void arg_print_lines_short(void);
 static void arg_print_loc(void);
@@ -395,7 +365,10 @@ static void arg_print_strings(void);
 static void arg_print_types(void);
 static void arg_print_weaknames(void);
 
+static void arg_suppress_harmless(void);
+
 static void arg_no_follow_debuglink(void);
+static void arg_no_follow_dsym(void);
 static void arg_add_debuglink_path(void);
 static void arg_debuglink_path_invalid(void);
 
@@ -515,6 +488,7 @@ static const char *usage_long_text[] = {
 "-ka  --check-all            Do all checks",
 "-kM  --check-aranges        Check ranges list (.debug_aranges)",
 "-kD  --check-attr-dup       Check duplicated attributes",
+"                            in dwarfdump itself",
 "-kE  --check-attr-encodings Notice attribute/class/form encodings",
 "                            and print a report on them",
 "-kn  --check-attr-names     Examine names in attributes",
@@ -635,7 +609,7 @@ static const char *usage_long_text[] = {
 "                                         (as much as possible)",
 " ",
 "-------------------------------------------------------------------",
-"GNU debuglink options",
+"GNU debuglink/Apple dSYM options",
 "-------------------------------------------------------------------",
 " --no-follow-debuglink       Do not follow GNU debuglink, ",
 "                             just use the file directly so,",
@@ -648,6 +622,10 @@ static const char *usage_long_text[] = {
 "                             startup and removing a ",
 "                             safety check but allowing debuglink",
 "                             and debugid paths to be used.",
+" --no-follow-dsym            Do not follow an Apple dSYM directory",
+"                             path to find DWARF data.",
+"                             .eh_frame format data may be in",
+"                             the executable object.",
 "-------------------------------------------------------------------",
 "Search text in attributes",
 "-------------------------------------------------------------------",
@@ -673,20 +651,42 @@ static const char *usage_long_text[] = {
 "                             (wide format) with -S",
 " ",
 "-------------------------------------------------------------------",
-"Help & Version",
+"Help, Version, and Miscellaneous",
 "-------------------------------------------------------------------",
 "-h   --help          Print this dwarfdump help message.",
 "-v   --verbose       Show more information.",
 "-vv  --verbose-more  Show even more information.",
 "-V   --version       Print version information.",
-"     --show-dwarfdump-conf Show what dwarfdump.conf is being used",
+"     --print-section-allocations Print summary of section ",
+"                         allocations via mmap and those via malloc.",
+"     --print-all-srcfiles print a sorted list of unique ",
+"                    file names defined in the DWARF.",
+"     --print-language-version-table print the DWARF6 ",
+"                         language version table.",
+"     --show-dwarfdump-conf Show what dwarfdump.conf is being used.",
 "     --show-args    Show the  current date, time, library version,",
-"                    dwarfdump version, and command arguments",
+"                    dwarfdump version, and command arguments.",
 "     --suppress-de-alloc-tree Turns off the libdwarf-cleanup of",
 "                    libdwarf-allocated memory on calling",
 "                    dwarf_finish(). Used to test that",
 "                    dwarfdump does dealloc everywhere",
 "                    it should for minimum memory use.",
+"     --suppress-harmless-errors Turns off the libdwarf checks",
+"                    for harmless errors. Improves libdwarf",
+"                    performance.",
+"     --no-dup-attr-check Turns off libdwarf checking for",
+"                    duplicated compiler-emitted attributes",
+"                    in reading abbreviation data so duplicates",
+"                    will not cause a DW_DLV_ERROR return from",
+"                    libdwarf.  dwarfdump --check-attr-dup will ",
+"                    check for them in dwarfdump.",
+"     --trace=0      Shows --trace values (1,2,3) that",
+"                    turn on detailed tracking of dwarfdump",
+"                    internal tables (for debugging dwarfdump).",
+"     --allocate-via-mmap  When possible allocations for",
+"                    loading sections will be with mmap.",
+"                    See also environment variable",
+"                    DWARF_WHICH_ALLOC.",
 "",
 };
 
@@ -722,6 +722,9 @@ OPT_CHECK_UNIQUE,             /* -kG  --check-unique        */
 OPT_CHECK_USAGE,              /* -ku  --check-usage         */
 OPT_CHECK_USAGE_EXTENDED,     /* -kuf --check-usage-extended*/
 OPT_CHECK_FUNCTIONS,          /*  --check-functions*/
+
+/* Speeds up libdwarf to do this */
+OPT_SUPPRESS_HARMLESS,        /* --suppress-harmless-errors */
 
 /* File Specifications    */
 OPT_FILE_ABI,          /* -x abi=<abi>    --file-abi=<abi>     */
@@ -767,6 +770,7 @@ OPT_FORMAT_SNC,               /* -cs      --format-snc           */
 /* Print Debug Sections                                   */
 OPT_PRINT_ABBREV,             /* -b   --print-abbrev      */
 OPT_PRINT_ALL,                /* -a   --print-all         */
+OPT_PRINT_ALL_SRCFILES,       /*      --print-all-srcfiles         */
 OPT_PRINT_ARANGES,            /* -r   --print-aranges     */
 OPT_PRINT_DEBUG_NAMES,        /*      --print-debug-names */
 OPT_PRINT_DEBUG_ADDR,         /*      --print-debug-addr */
@@ -794,11 +798,14 @@ OPT_PRINT_STRINGS,            /* -s   --print-strings     */
 OPT_PRINT_STR_OFFSETS,        /*      --print-str-offsets */
 OPT_PRINT_TYPE,               /* -y   --print-type        */
 OPT_PRINT_WEAKNAME,           /* -w   --print-weakname    */
-
+OPT_PRINT_ALLOCATIONS,        /* --print-section-allocations */
+OPT_PRINT_LANGUAGE_VERSION_TABLE,
+    /* --print-language-version_table */
 /* debuglink options */
 OPT_NO_FOLLOW_DEBUGLINK,     /* --no-follow-debuglink */
 OPT_ADD_DEBUGLINK_PATH,      /* --add-debuglink-path=<text> */
 OPT_SUPPRESS_DEBUGLINK_CRC,  /* --suppress-debuglink-crc */
+OPT_NO_FOLLOW_DSYM,          /* --no-follow-dsym */
 
 /* Search text in attributes                        */
 OPT_SEARCH_ANY,       /* -S any=<text>   --search-any=<text>  */
@@ -824,8 +831,9 @@ OPT_SHOW_ARGS,                /*   --show-args               */
 /* Trace                                                     */
 OPT_TRACE,                    /* -# --trace=<num>            */
 
+OPT_NO_DUP_ATTR_CHECK,        /*  --no-dup-attr-check  */
 OPT_ALLOC_TREE_OFF,           /* --suppress-de-alloc-tree */
-
+OPT_ALLOCATE_VIA_MMAP,        /* --allocate-via-mmap */
 OPT_END
 };
 
@@ -917,6 +925,7 @@ OPT_FORMAT_SUPPRESS_OFFSETS },
 /* Print Debug Sections. */
 {"print-abbrev",      dwno_argument, 0, OPT_PRINT_ABBREV     },
 {"print-all",         dwno_argument, 0, OPT_PRINT_ALL        },
+{"print-all-srcfiles",dwno_argument, 0, OPT_PRINT_ALL_SRCFILES },
 {"print-aranges",     dwno_argument, 0, OPT_PRINT_ARANGES    },
 {"print-debug-addr",  dwno_argument, 0, OPT_PRINT_DEBUG_ADDR},
 {"print-debug-names", dwno_argument, 0, OPT_PRINT_DEBUG_NAMES},
@@ -927,11 +936,13 @@ OPT_FORMAT_SUPPRESS_OFFSETS },
 {"print-fission",     dwno_argument, 0, OPT_PRINT_FISSION    },
 {"print-frame",       dwno_argument, 0, OPT_PRINT_FRAME      },
 {"print-info",        dwno_argument, 0, OPT_PRINT_INFO       },
+{"print-language-version-table",       dwno_argument, 0,
+    OPT_PRINT_LANGUAGE_VERSION_TABLE },
 {"print-lines",       dwno_argument, 0, OPT_PRINT_LINES      },
 {"print-lines-short", dwno_argument, 0, OPT_PRINT_LINES_SHORT},
 {"print-loc",         dwno_argument, 0, OPT_PRINT_LOC        },
 {"print-macinfo",     dwno_argument, 0, OPT_PRINT_MACINFO    },
-{"print-machine-arch", dwno_argument, 0, OPT_PRINT_MACHINE_ARCH    },
+{"print-machine-arch", dwno_argument, 0, OPT_PRINT_MACHINE_ARCH},
 {"print-producers",   dwno_argument, 0, OPT_PRINT_PRODUCERS  },
 {"print-pubnames",    dwno_argument, 0, OPT_PRINT_PUBNAMES   },
 {"print-ranges",      dwno_argument, 0, OPT_PRINT_RANGES     },
@@ -944,12 +955,15 @@ OPT_FORMAT_SUPPRESS_OFFSETS },
 {"print-str-offsets", dwno_argument, 0, OPT_PRINT_STR_OFFSETS},
 {"print-type",        dwno_argument, 0, OPT_PRINT_TYPE       },
 {"print-weakname",    dwno_argument, 0, OPT_PRINT_WEAKNAME   },
+{"print-section-allocations", dwno_argument, 0,
+    OPT_PRINT_ALLOCATIONS },
 
 /*  GNU debuglink options */
 {"no-follow-debuglink", dwno_argument, 0,OPT_NO_FOLLOW_DEBUGLINK},
 {"add-debuglink-path", dwrequired_argument, 0,OPT_ADD_DEBUGLINK_PATH},
 {"suppress-debuglink-crc", dwno_argument, 0,
     OPT_SUPPRESS_DEBUGLINK_CRC},
+{"no-follow-dsym", dwno_argument, 0,OPT_NO_FOLLOW_DSYM},
 
 /* Search text in attributes. */
 {"search-any",            dwrequired_argument, 0,OPT_SEARCH_ANY  },
@@ -969,18 +983,21 @@ OPT_FORMAT_SUPPRESS_OFFSETS },
 {"search-regex-count",    dwrequired_argument, 0,
     OPT_SEARCH_REGEX_COUNT   },
 
-/* Help & Version. */
+/* Help & Version & miscellaneous. */
 {"help",          dwno_argument, 0, OPT_HELP         },
 {"verbose",       dwno_argument, 0, OPT_VERBOSE      },
 {"verbose-more",  dwno_argument, 0, OPT_VERBOSE_MORE },
 {"version",       dwno_argument, 0, OPT_VERSION      },
 {"show-dwarfdump-conf",dwno_argument, 0, OPT_SHOW_DWARFDUMP_CONF },
 {"show-args",     dwno_argument, 0, OPT_SHOW_ARGS },
+{"no-dup-attr-check", dwno_argument, 0, OPT_NO_DUP_ATTR_CHECK },
+{"allocate-via-mmap", dwno_argument, 0, OPT_ALLOCATE_VIA_MMAP },
 
 /* Trace. */
 {"trace", dwrequired_argument, 0, OPT_TRACE},
 
 {"suppress-de-alloc-tree",dwno_argument,0,OPT_ALLOC_TREE_OFF},
+{"suppress-harmless-errors",dwno_argument,0,OPT_SUPPRESS_HARMLESS},
 {0,0,0,0}
 };
 
@@ -1035,7 +1052,7 @@ void arg_trace(void)
         glflags.nTrace[nTraceLevel] = 1;
     }
     /* Display dwarfdump debug options. */
-    if (dump_options) {
+    if ( glflags.nTrace[KIND_OPTIONS]) {
         /*  --trace=0 to dwarfdump gets us here. */
         print_usage_message(usage_debug_text);
         makename_destructor();
@@ -1049,6 +1066,11 @@ void arg_print_all(void)
 {
     suppress_check_dwarf();
     do_all();
+}
+/*  Option '--print-all-srcfiles' */
+void arg_print_all_srcfiles(void)
+{
+    glflags.gf_print_all_srcfiles = TRUE;
 }
 
 /*  Option '-b' */
@@ -1121,6 +1143,12 @@ void arg_format_producer(void)
 void arg_format_expr_ops_joined(void)
 {
     glflags.gf_expr_ops_joined = TRUE;
+}
+
+/* Option --suppress-harmless-errors */
+void arg_suppress_harmless(void)
+{
+    glflags.gf_suppress_harmless = TRUE;
 }
 /*  Option '-C' -format-extensions */
 void arg_format_extensions(void)
@@ -1305,7 +1333,12 @@ void arg_check_all(void)
     glflags.gf_check_self_references = TRUE;
     glflags.gf_check_attr_encoding = TRUE;
     glflags.gf_print_usage_tag_attr = TRUE;
+
+    /*  Not letting libdwarf check */
+    glflags.gf_no_check_duplicated_attributes = TRUE;
+    /*  Let dwarfdump check */
     glflags.gf_check_duplicated_attributes = TRUE;
+
     glflags.gf_check_functions = TRUE;
 }
 
@@ -1343,8 +1376,11 @@ void arg_check_show(void)
 /*  Option '-kD' --check-attr-dup */
 void arg_check_attr_dup(void)
 {
-    /* Check duplicated attributes */
+    /* Check duplicated attributes in dwarfdump */
     suppress_print_dwarf();
+    /* avoid checking attr dups in libdwarf itself */
+    glflags.gf_no_check_duplicated_attributes = TRUE;
+    /* Let dwarfdump find the dups */
     glflags.gf_check_duplicated_attributes = TRUE;
     glflags.gf_info_flag = TRUE;
     glflags.gf_types_flag = TRUE;
@@ -1631,6 +1667,14 @@ void arg_l_multiple_selection(void)
     }
 }
 
+/*  Option '--print-language-version-table' */
+void arg_print_language_version_table(void)
+{
+    /* shows the DWARF6 language version table */
+    glflags.gf_print_language_version_table = TRUE;
+    suppress_check_dwarf();
+}
+
 /*  Option '-l' */
 void arg_print_lines(void)
 {
@@ -1816,6 +1860,11 @@ void arg_S_multiple_selection(void)
 void arg_no_follow_debuglink(void)
 {
     glflags.gf_no_follow_debuglink = TRUE;
+}
+/*  Option --no-follow-dsym */
+void arg_no_follow_dsym(void)
+{
+    glflags.gf_no_follow_dsym = TRUE;
 }
 
 /*  Option --suppress-debuglink-crc */
@@ -2114,6 +2163,11 @@ void arg_print_weaknames(void)
     glflags.gf_weakname_flag = TRUE;
     suppress_check_dwarf();
 }
+/* Option --print-section-allocations */
+void arg_print_section_allocations(void)
+{
+    glflags. gf_print_section_allocations = TRUE;
+}
 
 /*  Option '-W[...]' */
 void arg_W_multiple_selection(void)
@@ -2333,6 +2387,14 @@ static void arg_format_suppress_sanitize(void)
     glflags.gf_no_sanitize_strings = TRUE;
 }
 
+/*  Option '--no-dup-attr-check'
+    Results in telling libdwarf not to check for
+    duplicate attributes in abbreviations.*/
+static void arg_no_dup_attr_check(void)
+{
+    glflags.gf_no_check_duplicated_attributes = TRUE;
+}
+
 /*  Option '-x tied=' */
 static void arg_file_tied(void)
 {
@@ -2426,6 +2488,12 @@ static void arg_x_invalid(void)
     }
     arg_usage_error = TRUE;
     glflags.gf_count_major_errors++;
+}
+/*  --allocate-via-mmap */
+static void arg_allocate_via_mmap(void)
+{
+    glflags.gf_allocation_via_mmap = TRUE;
+    dwarf_set_load_preference(Dwarf_Alloc_Mmap);
 }
 
 /*  Process the command line arguments and set the
@@ -2576,6 +2644,7 @@ set_command_options(int argc, char *argv[])
         /* Print Debug Sections. */
         case OPT_PRINT_ABBREV:      arg_print_abbrev();      break;
         case OPT_PRINT_ALL:         arg_print_all();         break;
+        case OPT_PRINT_ALL_SRCFILES: arg_print_all_srcfiles(); break;
         case OPT_PRINT_ARANGES:     arg_print_aranges();     break;
         case OPT_PRINT_DEBUG_NAMES: arg_print_debug_names(); break;
         case OPT_PRINT_DEBUG_ADDR:  arg_print_debug_addr();  break;
@@ -2587,6 +2656,8 @@ set_command_options(int argc, char *argv[])
         case OPT_PRINT_FISSION:     arg_print_fission();     break;
         case OPT_PRINT_FRAME:       arg_print_debug_frame(); break;
         case OPT_PRINT_INFO:        arg_print_info();        break;
+        case OPT_PRINT_LANGUAGE_VERSION_TABLE:
+            arg_print_language_version_table();       break;
         case OPT_PRINT_LINES:       arg_print_lines();       break;
         case OPT_PRINT_LINES_SHORT: arg_print_lines_short(); break;
         case OPT_PRINT_LOC:         arg_print_loc();         break;
@@ -2604,12 +2675,15 @@ set_command_options(int argc, char *argv[])
         case OPT_PRINT_STR_OFFSETS: arg_print_str_offsets(); break;
         case OPT_PRINT_TYPE:        arg_print_types();       break;
         case OPT_PRINT_WEAKNAME:    arg_print_weaknames();   break;
+        case OPT_PRINT_ALLOCATIONS: arg_print_section_allocations();
+            break;
 
         /* debuglink attributes */
         case OPT_NO_FOLLOW_DEBUGLINK: arg_no_follow_debuglink();break;
         case OPT_ADD_DEBUGLINK_PATH: arg_add_debuglink_path();  break;
         case OPT_SUPPRESS_DEBUGLINK_CRC:
             arg_suppress_debuglink_crc(); break;
+        case OPT_NO_FOLLOW_DSYM: arg_no_follow_dsym();break;
 
         /* Search text in attributes. */
         case OPT_SEARCH_ANY:            arg_search_any();
@@ -2640,11 +2714,22 @@ set_command_options(int argc, char *argv[])
             arg_show_args();break;
         /* Trace. */
         case OPT_TRACE: arg_trace(); break;
+        case OPT_NO_DUP_ATTR_CHECK:
+            /*  Suppress checking for duplicate attributes
+                in abbreviations entries,
+                It is rare compilers emit duplicates, but
+                if one did, use this option to let dwarfdump show
+                things as they are rather than generating an error.*/
+            arg_no_dup_attr_check(); break;
 
+        case OPT_SUPPRESS_HARMLESS: arg_suppress_harmless();break;
         case OPT_ALLOC_TREE_OFF:
             /*  Suppress nearly all libdwarf de_alloc_tree
                 record keeping. */
             dwarf_set_de_alloc_flag(FALSE);
+            break;
+        case OPT_ALLOCATE_VIA_MMAP:
+            arg_allocate_via_mmap();
             break;
 
         default: arg_usage_error = TRUE; break;
@@ -2655,7 +2740,8 @@ set_command_options(int argc, char *argv[])
 /*  This is a hack allowing us to pretend that
     dwarfdump  --suppress-de-alloc-tree foo.o
     has no arguments.  Because the args here really
-    are special for use by dwarfdump developers and
+    are special for use by dwarfdump developers  or
+    special situations and
     even with these special args we want do_all() to be
     called by process_args() below if there are no
     'normal' - or -- args.
@@ -2673,10 +2759,13 @@ static const char *simplestdargs[] ={
 "--verbose",
 "--show-dwarfdump-conf",
 "--show-args",
+"--no-dup-form-check",
 "--verbose-more",
 "--suppress-de-alloc-tree",
 "--suppress-debuglink-crc",
 "--no-follow-debuglink",
+"--no-dup-attr-check",
+"--allocate-via-mmap",
 0
 };
 
@@ -2716,9 +2805,20 @@ lacking_normal_args (int argct,char **args)
 const char *
 process_args(int argc, char *argv[])
 {
-    /* the call sets up glflags.newprogname, returns its string */
-    glflags.program_name = special_program_name(argv[0]);
+    /*  If building for a regression test run
+        on msys2 (and everywhere) , use fixed
+        name, fullname instead of argv[0], so tests pass
+        identically in all supported environments */
+#ifdef DWREGRESSIONTEMP
+        /* for the benefit of testing on msys2 so names
+            match. We do it for all platforms for
+            full consistency. */
+    glflags.program_name     = "./dwarfdump";
+    glflags.program_fullname = "./dwarfdump";
+#else /* ! DWREGRESSIONTEMP */
+    glflags.program_name     = argv[0];
     glflags.program_fullname = argv[0];
+#endif /* DWREGRESSIONTEMP */
 
     suppress_check_dwarf();
     if (argv[1] && lacking_normal_args(argc-1,argv+1)) {
@@ -2822,8 +2922,19 @@ process_args(int argc, char *argv[])
     }
 
     if (glflags.gf_do_check_dwarf) {
-        /*  Reduce verbosity when checking
-            (checking means checking-only). */
+        if (glflags.verbose) {
+            /*  Specifically now set > 1 for
+                dd_check_attr_encoding.c
+                to know extra detail is wanted there.
+                Somewhat messy conflation of flags. */
+            glflags.gf_check_verbose_mode++;
+        }
+        /*  Set specific verbosity when checking
+            (checking means checking-only).
+            And ensure non-zero for error reporting CU/DIE
+            details during checking.
+            This affects how dd_check_attr_encoding.c
+            works. */
         glflags.verbose = 1;
     }
     return do_uri_translation(argv[dwoptind],"file-to-process");

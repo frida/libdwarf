@@ -4,7 +4,7 @@ gennames_src = [
   'gennames.c'
 ]
 
-gennames_args = []
+gennames_args = ['-I.']
 if (lib_type == 'static')
   gennames_args += ['-DLIBDWARF_STATIC']
 endif

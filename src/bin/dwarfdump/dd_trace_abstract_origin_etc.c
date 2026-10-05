@@ -83,7 +83,6 @@ dd_trace_abstract_origin_etc(
     struct esb_s *valname,
     struct esb_s *esb_extra,
     int           die_indent_level,
-    int           pd_dwarf_names_print_on_error,
     Dwarf_Error  *err)
 {
     char typebuf[ESB_FIXED_ALLOC_SIZE];
@@ -113,7 +112,7 @@ dd_trace_abstract_origin_etc(
     if (tres == DW_DLV_ERROR) {
         struct esb_s m;
         const char *n =
-            get_AT_name(attrnum,pd_dwarf_names_print_on_error);
+            get_AT_name(attrnum);
         esb_constructor(&m);
         esb_append(&m,
             "Cannot get get value for a ");
@@ -179,8 +178,7 @@ dd_trace_abstract_origin_etc(
                 DROP_ERROR_INSTANCE(dbg,frres,*err);
             } else {
                 const char *n =
-                    get_AT_name(attrnum,
-                        pd_dwarf_names_print_on_error);
+                    get_AT_name(attrnum);
                 struct esb_s m;
                 esb_constructor(&m);
                 esb_append(&m,
@@ -197,8 +195,7 @@ dd_trace_abstract_origin_etc(
             }
         } else if (frres == DW_DLV_NO_ENTRY) {
             const char *n =
-                get_AT_name(attrnum,
-                pd_dwarf_names_print_on_error);
+                get_AT_name(attrnum);
             struct esb_s m;
 
             esb_constructor(&m);
@@ -215,8 +212,7 @@ dd_trace_abstract_origin_etc(
         }
         frres = dwarf_dieoffset(die, &die_goff, err);
         if (frres != DW_DLV_OK) {
-            const char *n = get_AT_name(attrnum,
-                pd_dwarf_names_print_on_error);
+            const char *n = get_AT_name(attrnum);
             struct esb_s m;
             esb_constructor(&m);
             esb_append(&m,
@@ -243,9 +239,12 @@ dd_trace_abstract_origin_etc(
             AddEntryIntoBucketGroup(glflags.pVisitedInfo,
                 die_goff,0,0,0,
                 NULL,FALSE);
-
             /*  Follow reference chain, looking for
                 self references */
+            if (glflags.nTrace[KIND_VISITED_INFO]) {
+                PrintBucketGroup("Added entry dd_trace A",
+                    glflags.pVisitedInfo);
+            }
             frres = dwarf_offdie_b(dbg,ref_goff,is_info2,
                 &ref_die,err);
             if (frres == DW_DLV_OK) {
@@ -253,9 +252,8 @@ dd_trace_abstract_origin_etc(
                 Dwarf_Off die_loff = 0; /* CU-relative. */
                 int fresb = 0;
 
-                if (dump_visited_info) {
-                    const char *atname = get_AT_name(attrnum,
-                        pd_dwarf_names_print_on_error);
+                if (glflags.nTrace[KIND_VISITED_INFO]) {
+                    const char *atname = get_AT_name(attrnum);
                     fresb = dwarf_die_CU_offset(die,
                         &die_loff, err);
                     if (fresb == DW_DLV_OK) {
@@ -277,8 +275,7 @@ dd_trace_abstract_origin_etc(
                         status? FIXME */
                 if (fresb != DW_DLV_OK) {
                     const char *n =
-                        get_AT_name(attrnum,
-                        pd_dwarf_names_print_on_error);
+                        get_AT_name(attrnum);
                     struct esb_s m;
                     esb_constructor(&m);
                     esb_append(&m,
@@ -310,6 +307,10 @@ dd_trace_abstract_origin_etc(
             }
             DeleteKeyInBucketGroup(glflags.pVisitedInfo,
                 die_goff);
+            if (glflags.nTrace[KIND_VISITED_INFO]) {
+                PrintBucketGroup("Deleted entry dd_trace A",
+                    glflags.pVisitedInfo);
+            }
             if (frres == DW_DLV_ERROR) {
                 esb_destructor(valname);
                 esb_destructor(esb_extra);
@@ -420,8 +421,7 @@ dd_trace_abstract_origin_etc(
             if (found == DW_DLV_ERROR) {
                 struct esb_s m;
                 const char *n =
-                    get_AT_name(attrnum,
-                    pd_dwarf_names_print_on_error);
+                    get_AT_name(attrnum);
                 esb_constructor(&m);
                 esb_append(&m,
                     "Cannot get get value for a ");
@@ -476,13 +476,23 @@ dd_trace_abstract_origin_etc(
                 }
             } else {
                 if (tares == DW_DLV_ERROR) {
+                    /*  Details of locviews are unclear to me. */
+                    if (attrnum != DW_AT_GNU_locviews) {
+                        esb_append(valname,
+                            " Reference fails: ");
+                        if (dwarf_errno(*err) ==
+                            /*  This means we might never see
+                                the error otherwise, just
+                                incomplete report. */
+                            DW_DLE_ABBREV_ATTR_DUPLICATION) {
+                            esb_append(valname,
+                                "  \n ERROR: in ref target: ");
+                            esb_append(valname,dwarf_errmsg(*err));
+                            ++glflags.gf_count_major_errors;
+                        }
+                    }
                     dwarf_dealloc_error(dbg,*err);
                     *err = 0;
-                    if (attrnum != DW_AT_GNU_locviews) {
-                        /*  Not yet sure I understand the value
-                            yet (of this attribute) . */
-                        esb_append(valname," Reference fails");
-                    }
                 }
             }
             if (target_die) {

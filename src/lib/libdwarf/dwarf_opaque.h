@@ -1,6 +1,6 @@
 /*
   Copyright (C) 2000-2005 Silicon Graphics, Inc.  All Rights Reserved.
-  Portions Copyright (C) 2007-2024 David Anderson. All Rights Reserved.
+  Portions Copyright (C) 2007-2026 David Anderson. All Rights Reserved.
   Portions Copyright (C) 2008-2010 Arxan Technologies, Inc. All Rights Reserved.
 
   This program is free software; you can redistribute it
@@ -77,12 +77,11 @@
 #define DBG_HAS_SECONDARY(p) (DBG_IS_PRIMARY(p) && \
     (DBG_IS_SECONDARY((p)->de_secondary_dbg)))
 
-#define DEBUG_PRIMARY_DBG 1 /* only for debugging */
+/*  For debugging. */
+const char * _dwarf_basename(const char *full);
+
 #undef  DEBUG_PRIMARY_DBG
 #ifdef DEBUG_PRIMARY_DBG
-const char *
-_dwarf_basename(const char *full);
-
 void
 _dwarf_print_is_primary(const char *msg,Dwarf_Debug p,int line,
     const char *filepath);
@@ -203,6 +202,15 @@ struct Dwarf_CU_Context_s {
         compiler is set to CC_PROD_METROW */
     Dwarf_Small cc_producer;
 
+    /*  Data relating to DW_AT_language_name
+        and DW_AT_language_version from CU DIE */
+    Dwarf_Half     cc_language_name;
+    Dwarf_Bool     cc_have_language_version;
+    int            cc_language_default_lowbound;
+    Dwarf_Unsigned cc_language_version;
+    const char    *cc_language_version_scheme;
+    const char    *cc_language_version_name;
+
     /*  cc_debug_offset is the global offset in the section
         of the area length field of the CU.
         The CU header of the CU is at offset
@@ -257,7 +265,7 @@ struct Dwarf_CU_Context_s {
 
     /*  cc_low_pc[_present] is applied as base address of
         of rnglists and loclists when reading an rle_head,
-        compied into cc_cu_base_address. Comes from
+        compiled into cc_cu_base_address. Comes from
         CU_DIE, not rnglists or loclists */
     Dwarf_Bool cc_low_pc_present;
 
@@ -277,7 +285,6 @@ struct Dwarf_CU_Context_s {
     /*  cc_cu_die_offset_present is non-zero if
         cc_cu_die_global_sec_offset is meaningful.  */
     Dwarf_Bool     cc_cu_die_offset_present;
-    Dwarf_Bool     cc_at_ranges_offset_present;
     /*  About: DW_AT_addr_base in CU DIE,
         offset to .debug_addr table */
     Dwarf_Bool     cc_addr_base_offset_present;
@@ -353,8 +360,6 @@ struct Dwarf_CU_Context_s {
     Dwarf_Bool     cc_macro_base_present;
     Dwarf_Bool     cc_macro_header_length_present;
 
-    /*  For quick access to .debug_ranges from a CU DIE. */
-    Dwarf_Unsigned cc_at_ranges_offset;
     /*  DW_SECT_RNGLISTS  */
     /*  DW_AT_GNU_ranges_base was a GNU extension that appeared
         but was unused. See dwarf_die_deliv.c for details. */
@@ -417,7 +422,16 @@ struct Dwarf_Section_s {
         Purpose: to handle DW_EH_PE_pcrel encoding. Leaving
         it zero is fine for non-elf.  */
     Dwarf_Addr     dss_addr;
-    Dwarf_Small    dss_data_was_malloc;
+
+    Dwarf_Unsigned dss_computed_mmap_offset;
+    Dwarf_Unsigned dss_computed_mmap_len;
+    Dwarf_Small *  dss_mmap_realarea;
+    /*  Value is Dwarf_Alloc_Malloc=1 or Dwarf_Alloc_Mmap=2 */
+    enum Dwarf_Sec_Alloc_Pref  dss_load_preference;
+    /*  Any valid Dwarf_Alloc_*, tells if free() or
+        equivalent required for dss_data. */
+    enum Dwarf_Sec_Alloc_Pref  dss_actual_load_type;
+
     /*  is_in_use set during initial object reading to
         detect duplicates. Ignored after setup done. */
     Dwarf_Small    dss_is_in_use;
@@ -435,8 +449,9 @@ struct Dwarf_Section_s {
 
     /*  If this is zdebug, to start  data/size are the
         raw section bytes.
-        Initially for all sections dss_data_was_malloc set FALSE
-            and dss_requires_decompress set FALSE.
+        Initially for all sections
+            dss_was_alloc set FALSE
+            dss_requires_decompress set FALSE.
         For zdebug set dss_zdebug_requires_decompress set TRUE
             In that case it is likely ZLIB compressed but
             we do not know that just scanning section headers.
@@ -447,10 +462,11 @@ struct Dwarf_Section_s {
         Set dss_data dss_size to point to malloc space and
             malloc size.
         Set dss_did_decompress FALSE
-        Set dss_was_malloc  TRUE */
+        Set dss_was_alloc  TRUE */
     Dwarf_Small    dss_zdebug_requires_decompress;
     Dwarf_Small    dss_did_decompress;
-    Dwarf_Small dss_shf_compressed;  /* section flag SHF_COMPRESS */
+    Dwarf_Small    dss_shf_compressed; /* section SHF_COMPRESS */
+    Dwarf_Small    dss_was_alloc;
 
     /* Section compression starts with ZLIB chars*/
     Dwarf_Small dss_ZLIB_compressed;
@@ -660,6 +676,7 @@ struct Dwarf_Debug_s {
     char de_in_tdestroy; /* for de_alloc_tree  DW202309-001 */
     /* DW_PATHSOURCE_BASIC or MACOS or DEBUGLINK */
     Dwarf_Small de_path_source;
+    Dwarf_Small de_preferred_load_type; /* DW_LOAD_PREF_MALLOC etc*/
     /*  de_path is only set automatically if dwarf_init_path()
         was used to initialize things.
         Used with the .gnu_debuglink section. */
@@ -683,7 +700,9 @@ struct Dwarf_Debug_s {
     /*  Number of bytes in the length, and offset field in various
         .debu* sections.  It's not very meaningful, and is
         only used in one 'approximate' calculation.
-        de_offset_size would be a more apropos name. */
+        de_offset_size would be a more apropos name.
+        If 32 is 32bit offsets.
+        If 64 is 64bit offsets. */
     Dwarf_Small de_length_size;
 
     /*  Size of the object file in bytes. If Unknown
@@ -698,6 +717,12 @@ struct Dwarf_Debug_s {
         Inspect de_ftype using the value of
         de_obj_machine or the following de_obj_* fields. */
     Dwarf_Unsigned de_obj_machine;
+
+    /*  For Elf is the obj header e_type field.
+        Not yet specified: value for MachO or PE objects,
+        so expect zero */
+    Dwarf_Unsigned de_obj_type;
+
     /*  For DW_FTYPE_APPLEUNIVERSAL this is the
         offset of an executable object in the multi-executable
         file.  For all other de_ftype values this has
@@ -843,6 +868,10 @@ struct Dwarf_Debug_s {
     unsigned int   de_universalbinary_count;
     unsigned int   de_universalbinary_index;
 
+    /*  If zero these are not validated and must be validated.
+        See _dwarf_validate_register_numbers() */
+    unsigned char  de_frame_numbers_validated;
+
     unsigned char de_big_endian_object; /* Non-zero if
         object being read is big-endian. */
 
@@ -866,6 +895,12 @@ struct Dwarf_Debug_s {
 
     struct Dwarf_Harmless_s de_harmless_errors;
 
+    /*  Non-zero (the default) if harmless errors are tracked
+        normally. If zero, then harmless errors are not tracked,
+        which can improve performance by avoiding string copies
+        in various error paths. */
+    unsigned char de_harmless_errors_on;
+
     struct Dwarf_Printf_Callback_Info_s  de_printf_callback;
     void *   de_printf_callback_null_device_handle;
 
@@ -885,7 +920,7 @@ struct Dwarf_Debug_s {
         .debug_addr (a GNU extension) and attempt
         to print a raw .debug_addr section.  Simply
         assuming the first CU seen values for these
-        work for everything in the GNU extenstion
+        work for everything in the GNU extension
         .debug_addr section. Only needed if the version
         here is 4 (DWARF4). */
     Dwarf_Half de_debug_addr_version;
@@ -1107,8 +1142,6 @@ _dwarf_elf_nlsetup(int fd,
     Dwarf_Handler errhand,
     Dwarf_Ptr errarg,
     Dwarf_Debug *dbg,Dwarf_Error *error);
-void _dwarf_destruct_elf_nlaccess(
-    struct Dwarf_Obj_Access_Interface_a_s *aip);
 
 extern int _dwarf_macho_setup(int fd,
     char *true_path,
@@ -1121,8 +1154,6 @@ extern int _dwarf_macho_setup(int fd,
     Dwarf_Handler errhand,
     Dwarf_Ptr errarg,
     Dwarf_Debug *dbg,Dwarf_Error *error);
-void _dwarf_destruct_macho_access(
-    struct Dwarf_Obj_Access_Interface_a_s *aip);
 
 extern int _dwarf_pe_setup(int fd,
     char *path,
@@ -1134,8 +1165,6 @@ extern int _dwarf_pe_setup(int fd,
     Dwarf_Handler errhand,
     Dwarf_Ptr errarg,
     Dwarf_Debug *dbg,Dwarf_Error *error);
-void _dwarf_destruct_pe_access(
-    struct Dwarf_Obj_Access_Interface_a_s *aip);
 
 void _dwarf_create_address_size_dwarf_error(Dwarf_Debug dbg,
     Dwarf_Error *error,
@@ -1167,6 +1196,12 @@ int  _dwarf_readr(int fd, char *buf, Dwarf_Unsigned size,
 int  _dwarf_seekr(int fd, Dwarf_Unsigned loc, int seektype,
     Dwarf_Unsigned *out_loc);
 int  _dwarf_openr(const char *name);
+
+/*   This does free or munmap as appropriate. */
+void _dwarf_malloc_section_free(struct Dwarf_Section_s * sec);
+
+enum Dwarf_Sec_Alloc_Pref
+    _dwarf_determine_section_allocation_type(void);
 
 int _dwarf_formblock_internal(Dwarf_Debug dbg,
     Dwarf_Attribute attr,
@@ -1205,6 +1240,13 @@ _dwarf_has_SECT_fission(Dwarf_CU_Context ctx,
     unsigned int      SECT_number, /* example: DW_SECT_RNGLISTS */
     Dwarf_Bool       *hasfissionoffset,
     Dwarf_Unsigned   *loclistsbase);
+int
+_dwarf_read_str_index_val_itself(Dwarf_Debug dbg,
+    unsigned theform, Dwarf_Small *info_ptr,
+    Dwarf_Small *section_end,
+    Dwarf_Unsigned *return_index,
+    Dwarf_Unsigned *return_index_length,
+    Dwarf_Error *error) ;
 
 int _dwarf_skip_leb128(char * leb,
     Dwarf_Unsigned * leblen,
@@ -1216,6 +1258,9 @@ int
 _dwarf_entrypc(Dwarf_Die die,
     Dwarf_Addr  *return_addr,
     Dwarf_Error *error);
-
 int _dwarf_get_suppress_debuglink_crc(void);
 void _dwarf_dumpsig(const char *msg, Dwarf_Sig8 *sig, int lineno);
+
+/*  solely to avoid duplicate reporting of a warning
+    reading a line table header.  */
+extern int _dw_linetab_harmless_reported;

@@ -34,10 +34,16 @@ limitations under the License.
  */
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   char filename[256];
+#ifdef DWREGRESSIONTEMP
+  /* Under msys2, the /tmp/ results in an open fail */
+  sprintf(filename, "junklibfuzzer.%d", getpid());
+#else
   sprintf(filename, "/tmp/libfuzzer.%d", getpid());
-
+#endif
   FILE *fp = fopen(filename, "wb");
   if (!fp) {
+    printf("FAIL libfuzzer cannot open temp as writeable %s\n",
+        filename);
     return 0;
   }
   fwrite(data, size, 1, fp);
@@ -52,7 +58,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
   Dwarf_Error *errp = 0;
   int i = 0;
 
-  fuzz_fd = open(filename, O_RDONLY|O_RDONLY);
+  fuzz_fd = open(filename, O_RDONLY|O_BINARY);
   if (fuzz_fd != -1) {
     res =
         dwarf_init_b(fuzz_fd, DW_GROUPNUMBER_ANY, errhand, errarg, &dbg, errp);
@@ -81,7 +87,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         if (res == DW_DLV_OK) {
           printf(">>Success");
         } else {
-          printf(">>Error");
+          printf(">>Error, dwarf_siblingof_b failed\n");
         }
         dwarf_dealloc(dbg, cu_die, DW_DLA_DIE);
       }

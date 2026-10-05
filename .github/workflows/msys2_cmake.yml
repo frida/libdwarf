@@ -4,18 +4,19 @@ name: msys2cmake
 on: 
   workflow_dispatch:
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
  msys2_cmake:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     defaults:
       run:
         shell: msys2 {0}
     env:
       PYTHONIOENCODING: "utf-8"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - uses: msys2/setup-msys2@v2
       with:
         msystem: MINGW64
@@ -24,7 +25,7 @@ jobs:
     - name: Build libdwarf
       run: |
         mkdir builddir && cd builddir
-        cmake -G Ninja -DCMAKE_INSTALL_PREFIX=/c/msys64/usr -DBUILD_DWARFEXAMPLE=ON -DDO_TESTING=ON -DBUILD_SHARED:BOOL=TRUE -DBUILD_NON_SHARED:BOOL=FALSE ../CMakeLists.txt
+        cmake -G Ninja -DCMAKE_INSTALL_PREFIX=/c/msys64/usr -DBUILD_DWARFEXAMPLE=ON -DDO_TESTING=ON -DINSTALL_STATIC_LIBRARIES=YES ../CMakeLists.txt
         ninja
         ninja install
         ninja test

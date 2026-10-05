@@ -366,7 +366,7 @@ dwarf_dealloc_ranges(Dwarf_Debug dbg, Dwarf_Ranges * rangesbuf,
     dwarf_dealloc(dbg,rangesbuf, DW_DLA_RANGES);
 }
 
-/*  Also used to determine DIE base_address,
+/*  In the past, determined DIE base_address,
     but that was wrong.
     Only a CU_die DW_AT_low_pc can provide
     a CU-wide base address and that is done when a CU is first
@@ -444,8 +444,6 @@ dwarf_get_ranges_baseaddress(Dwarf_Debug dw_dbg,
     Dwarf_Error    *dw_error)
 {
     Dwarf_CU_Context context = 0;
-    Dwarf_Unsigned local_ranges_offset = 0;
-    Dwarf_Bool     local_ranges_offset_present = FALSE;
     Dwarf_Bool     have_die_ranges_offset = FALSE;
     Dwarf_Unsigned die_ranges_offset = 0;
     Dwarf_Bool     have_die_base_addr = FALSE;
@@ -465,14 +463,7 @@ dwarf_get_ranges_baseaddress(Dwarf_Debug dw_dbg,
         return DW_DLV_OK;
     }
     /*  If the DIE passed in has a DW_AT_ranges attribute
-        we will use that DIE ranges offset.
-        Otherwise we use the DW_AT_ranges from the
-        CU DIE (if any)
-        If the DIE passed in has a DW_AT_low_pc
-        attribute we will use that as the ranges
-        base address, otherwise we use the
-        cu context base adddress (if present) ...
-        which may be incorrect... ? */
+        we use that DIE ranges offset.  */
     res = _dwarf_determine_die_range_offset(dw_dbg,
         dw_die,&have_die_ranges_offset,&die_ranges_offset,
         &have_die_base_addr,&die_base_addr,dw_error);
@@ -483,7 +474,6 @@ dwarf_get_ranges_baseaddress(Dwarf_Debug dw_dbg,
             *dw_error = 0;
         }
     }
-
     context = dw_die->di_cu_context;
     if (!context) {
         _dwarf_error_string(dw_dbg, dw_error,
@@ -492,20 +482,11 @@ dwarf_get_ranges_baseaddress(Dwarf_Debug dw_dbg,
             "dwarf_get_ranges_baseaddress");
         return DW_DLV_ERROR;
     }
-    if (have_die_ranges_offset) {
-        local_ranges_offset_present = have_die_ranges_offset;
-        local_ranges_offset = die_ranges_offset;
-    } else {
-        local_ranges_offset_present =
-            context->cc_at_ranges_offset_present;
-        local_ranges_offset =
-            context->cc_at_ranges_offset;
-    }
     if (dw_at_ranges_offset) {
-        *dw_at_ranges_offset = local_ranges_offset;
+        *dw_at_ranges_offset = die_ranges_offset;
     }
     if (dw_at_ranges_offset_present) {
-        *dw_at_ranges_offset_present = local_ranges_offset_present;
+        *dw_at_ranges_offset_present = have_die_ranges_offset;
     }
     if (context->cc_base_address_present) {
         *dw_baseaddress = context->cc_base_address;

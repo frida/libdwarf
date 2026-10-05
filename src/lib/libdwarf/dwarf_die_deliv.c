@@ -884,7 +884,8 @@ _dwarf_make_CU_Context(Dwarf_Debug dbg,
     }
     local_length_size = cu_context->cc_length_size;
     length = cu_context->cc_length;
-    max_cu_local_offset =  length;
+    max_cu_local_offset = length + local_length_size +
+        cu_context->cc_extension_size;
     res  = _dwarf_read_cu_version_and_abbrev_offset(dbg,
         cu_ptr,
         is_info,
@@ -1372,6 +1373,53 @@ find_cu_die_base_fields(Dwarf_Debug dbg,
                 break;
             }
             switch(attrnum) {
+            case DW_AT_language_name:{
+                /*  arranges to set the cc_language
+                    values whichever order the attributes. */
+                int lres = 0;
+                Dwarf_Unsigned uval = 0;
+                lres = dwarf_formudata(attr,
+                    &uval, error);
+                if (lres == DW_DLV_OK) {
+                    cucon->cc_language_name = (Dwarf_Half)uval;
+                } else {
+                    local_attrlist_dealloc(dbg,atcount,alist);
+                    return lres;
+                }
+                if (cucon->cc_have_language_version) {
+                    /* Ignore return code */
+                    dwarf_lvn_name_direct(
+                        cucon->cc_language_name,
+                        cucon->cc_language_version,
+                        &cucon->cc_language_version_name,
+                        &cucon->cc_language_version_scheme);
+                }
+            }
+            break;
+            case DW_AT_language_version: {
+                /*  arranges to set the cc_language
+                    values whichever order the attributes. */
+                int lres = 0;
+                Dwarf_Unsigned uval = 0;
+                lres = dwarf_formudata(attr,
+                    &uval, error);
+                if (lres == DW_DLV_OK) {
+                    cucon->cc_language_version = uval;
+                    cucon->cc_have_language_version = TRUE;
+                } else {
+                    local_attrlist_dealloc(dbg,atcount,alist);
+                    return lres;
+                }
+                if (cucon->cc_language_name) {
+                    /* Ignore return code */
+                    lres = dwarf_lvn_name_direct(
+                        cucon->cc_language_name,
+                        cucon->cc_language_version,
+                        &cucon->cc_language_version_name,
+                        &cucon->cc_language_version_scheme);
+                }
+            }
+            break;
             case DW_AT_producer:
                 set_producer_type(cudie,cu_context);
                 break;
@@ -1382,7 +1430,7 @@ find_cu_die_base_fields(Dwarf_Debug dbg,
                     non-standard version
                     of split dwarf. Not DWARF5. */
                 int sres = 0;
-                if (version_stamp != DW_CU_VERSION4 ) {
+                if (version_stamp < DW_CU_VERSION4) {
                     /* Not supposed to happen. */
                     local_attrlist_dealloc(dbg,atcount,alist);
                     _dwarf_error(dbg,error,
@@ -1402,7 +1450,8 @@ find_cu_die_base_fields(Dwarf_Debug dbg,
                             debug-fission extension DWO_id.
                         */
                         if (memcmp(&signature,&cucon->cc_signature,
-                            sizeof(signature))) {
+                            sizeof(signature)) &&
+                            dbg->de_harmless_errors_on) {
                             /*  The two sigs do not match! */
                             const char *m="DW_DLE_SIGNATURE_MISMATCH"
                                 "DWARF4 extension fission signature"
@@ -1453,10 +1502,7 @@ find_cu_die_base_fields(Dwarf_Debug dbg,
                     &at_ranges_offset,
                     &is_info,
                     error);
-                if (res == DW_DLV_OK) {
-                    cucon->cc_at_ranges_offset = at_ranges_offset;
-                    cucon->cc_at_ranges_offset_present = TRUE;
-                } else {
+                if (res != DW_DLV_OK) {
                     local_attrlist_dealloc(dbg,atcount,alist);
                     return res;
                 }
@@ -1747,7 +1793,7 @@ finish_up_cu_context_from_cudie(Dwarf_Debug dbg,
             /*  For finding base data from skeleton.
                 For the few fields inherited
                 (per the DWARF5 standard but for
-                .debug_rnglists is not interited
+                .debug_rnglists is not inherited
                 in spite of what DW5 says). */
             res = _dwarf_find_all_offsets_via_fission(dbg,
                 cu_context,error);
@@ -1782,7 +1828,7 @@ insert_into_cu_context_list(Dwarf_Debug_InfoTypes dis,
 
     /*  Add the context into the section context list.
         This is the one and only place where it is
-        saved for re-use and eventual dealloc. */
+        saved for reuse and eventual dealloc. */
     if (!dis->de_cu_context_list) {
         /*  First cu encountered. */
         dis->de_cu_context_list = icu_context;
@@ -1915,33 +1961,37 @@ _dwarf_load_die_containing_section(Dwarf_Debug dbg,
         _dwarf_load_debug_types(dbg,&err2);
     if (resd == DW_DLV_ERROR) {
         if (reloc_incomplete(resd,err2)) {
-            /*  We will assume all is ok, though it is not.
-                Relocation errors need not be fatal. */
-            char msg_buf[300];
-            char *dwerrmsg = 0;
-            char *msgprefix =
-                "Relocations did not complete successfully, "
-                "but we are " " ignoring error: ";
-            size_t totallen = 0;
-            size_t prefixlen = 0;
+            if (dbg->de_harmless_errors_on) {
+                /*  We will assume all is ok, though it is not.
+                    Relocation errors need not be fatal. */
+                char msg_buf[300];
+                char* dwerrmsg = 0;
+                char* msgprefix =
+                    "Relocations did not complete successfully, "
+                    "but we are " " ignoring error: ";
+                size_t totallen = 0;
+                size_t prefixlen = 0;
 
-            dwerrmsg = dwarf_errmsg(err2);
-            prefixlen = strlen(msgprefix);
-            totallen = prefixlen + strlen(dwerrmsg);
-            if ( totallen >= sizeof(msg_buf)) {
-                const char *m= "Error:corrupted dwarf message table!";
-                /*  Impossible unless something corrupted.
-                    Provide a shorter dwerrmsg*/
-                _dwarf_safe_strcpy(msg_buf,sizeof(msg_buf),
-                    m,strlen(m));
-            } else {
-                _dwarf_safe_strcpy(msg_buf,sizeof(msg_buf),
-                    msgprefix,prefixlen);
-                _dwarf_safe_strcpy(msg_buf +prefixlen,
-                    sizeof(msg_buf)-prefixlen,
-                    dwerrmsg,strlen(dwerrmsg));
+                dwerrmsg = dwarf_errmsg(err2);
+                prefixlen = strlen(msgprefix);
+                totallen = prefixlen + strlen(dwerrmsg);
+                if (totallen >= sizeof(msg_buf)) {
+                    const char* m =
+                        "Error:corrupted dwarf message table!";
+                    /*  Impossible unless something corrupted.
+                        Provide a shorter dwerrmsg*/
+                    _dwarf_safe_strcpy(msg_buf, sizeof(msg_buf),
+                        m, strlen(m));
+                }
+                else {
+                    _dwarf_safe_strcpy(msg_buf, sizeof(msg_buf),
+                        msgprefix, prefixlen);
+                    _dwarf_safe_strcpy(msg_buf + prefixlen,
+                        sizeof(msg_buf) - prefixlen,
+                        dwerrmsg, strlen(dwerrmsg));
+                }
+                dwarf_insert_harmless_error(dbg, msg_buf);
             }
-            dwarf_insert_harmless_error(dbg,msg_buf);
             /*  Fall thru to use the newly loaded section.
                 even though it might not be adequately
                 relocated. */

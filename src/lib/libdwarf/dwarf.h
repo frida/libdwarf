@@ -27,8 +27,8 @@ Free Software Foundation, Inc., 51 Franklin Street - Fifth
 Floor, Boston MA 02110-1301, USA.
 */
 
-/*! @file */
-/*! @page dwarf.h
+/*! @file dwarf.h */
+/*! @page dwarfheader
     dwarf.h contains all the identifiers
     such as DW_TAG_compile_unit etc from the
     various versions of the DWARF Standard
@@ -157,6 +157,13 @@ extern "C" {
 
 /* TI = Texas Instruments, for DWARF in COFF */
 /* https://www.ti.com/lit/an/spraab5/spraab5.pdf?ts=1705994928599 */
+
+/*  This set of four for C28x/C6000 TI DSP
+DW_TAG_TI_branch_targtet        0x4001
+DW_TAG_TI_far_type              0x4002
+DW_TAG_TI_pragma_can_inline     0x4003
+DW_TAG_TI_assign_register       0x4004
+*/
 
 #define DW_TAG_TI_far_type              0x4080 /* TI */
 #define DW_TAG_lo_user                  0x4080 /* TI */
@@ -448,6 +455,15 @@ extern "C" {
 #define DW_AT_deleted                           0x8a /* DWARF5 */
 #define DW_AT_defaulted                         0x8b /* DWARF5 */
 #define DW_AT_loclists_base                     0x8c /* DWARF5 */
+/*  As of 6 January 2025 the DWARF committee promises
+    not to change the name or the assigned number of
+    the following two attributes. So
+    compilers are free to use these now with DWARF 5
+    or earlier. The applicable FORMs of are
+    of form class constant (See DWARF5 Section 7.5.5 Classes
+    and Forms). */
+#define DW_AT_language_name                     0x90 /* DWARF6 */
+#define DW_AT_language_version                  0x91 /* DWARF6 */
 
 /* GreenHills, ghs.com GHS C */
 #define DW_AT_ghs_namespace_alias   0x806
@@ -464,7 +480,6 @@ extern "C" {
 #define DW_AT_TI_veneer                         0x2000  /* TI */
 
 #define DW_AT_MIPS_fde                          0x2001 /* MIPS/SGI */
-#define DW_AT_TI_symbol_name                    0x2001 /* TI */
 #define DW_AT_MIPS_loop_begin                   0x2002 /* MIPS/SGI */
 #define DW_AT_MIPS_tail_loop_begin              0x2003 /* MIPS/SGI */
 #define DW_AT_MIPS_epilog_begin                 0x2004 /* MIPS/SGI */
@@ -485,6 +500,23 @@ extern "C" {
 #define DW_AT_MIPS_assumed_shape_dopetype       0x2010 /* MIPS/SGI */
 #define DW_AT_MIPS_assumed_size                 0x2011 /* MIPS/SGI */
 #define DW_AT_TI_interrupt                      0x2011 /* TI */
+
+#define DW_AT_TI_symbol_name            0x2001
+/*  Next 10 for TI C28x C62x C28x maybe other TI */
+#define DW_AT_TI_max_frame_size         0x2002 /* TI */
+/*
+DW_AT_TI_interrupt              0x2003
+*/
+#define DW_AT_TI_asm_line               0x2004 /* TI */
+#define DW_AT_TI_begin_file             0x2005 /* TI */
+#define DW_AT_TI_end_file               0x2006 /* TI */
+#define DW_AT_TI_begin_line             0x2007 /* TI */
+#define DW_AT_TI_end_line               0x2008 /* TI */
+#define DW_AT_TI_begin_column           0x2009 /* TI */
+#define DW_AT_TI_end_column             0x200a /* TI */
+/*
+DW_AT_TI_symbol_name                    0x200b
+*/
 
 /* HP extensions. */
 #define DW_AT_HP_unmodifiable      0x2001 /* conflict: MIPS */
@@ -645,18 +677,19 @@ extern "C" {
 #define DW_AT_GNU_bias                          0x2305 /* GNU */
 
 /*  Go-specific type attributes
-    Naming as lower-case go instead of GO is a small mistake
-    by the Go language folks, it seems. This is the
+    Naming as lower-case go instead of GO is the choice
+    the Go language folks chose, it seems. This is the
     common spelling for these. */
 #define DW_AT_go_kind                           0x2900
 #define DW_AT_go_key                            0x2901
 #define DW_AT_go_elem                           0x2902
-
 /*  Attribute for DW_TAG_member of a struct type.
     Nonzero value indicates the struct field is an embedded field.*/
 #define DW_AT_go_embedded_field                 0x2903
-
 #define DW_AT_go_runtime_type                   0x2904
+#define DW_AT_go_package_name                   0x2905
+#define DW_AT_go_dict_index                     0x2906
+#define DW_AT_go_closure_offset                 0x2907
 
 /* UPC extension. */
 #define DW_AT_upc_threads_scaled                0x3210 /* UPC */
@@ -1156,10 +1189,6 @@ most-likely-useful name. */
 #define DW_LANG_UPC                     0x0012 /* DWARF3f */
 #define DW_LANG_D                       0x0013 /* DWARF3f */
 #define DW_LANG_Python                  0x0014 /* DWARF4 */
-/*  The following 2 are not yet formally approved October 2010, but
-    it seems extremely likely they will be approved as the committee
-    chair agrees these should be ok and no one on the committee
-    has objected. */
 #define DW_LANG_OpenCL                  0x0015 /* DWARF5 */
 #define DW_LANG_Go                      0x0016 /* DWARF5 */
 #define DW_LANG_Modula3                 0x0017 /* DWARF5 */
@@ -1177,9 +1206,15 @@ most-likely-useful name. */
 #define DW_LANG_Fortran08               0x0023 /* DWARF5 */
 #define DW_LANG_RenderScript            0x0024 /* DWARF5 */
 #define DW_LANG_BLISS                   0x0025 /* DWARF5 */
+/*  The committee has, in
+    https://dwarfstd.org/languages-v6.html
+    specified that these language code, may be
+    used by compilers now, and promises these
+    will not change. */
 #define DW_LANG_Kotlin                  0x0026 /* DWARF6 */
 #define DW_LANG_Zig                     0x0027 /* DWARF6 */
 #define DW_LANG_Crystal                 0x0028 /* DWARF6 */
+/*  0x0029 has not been assigned to a language. */
 #define DW_LANG_C_plus_plus_17          0x002a /* DWARF6 */
 #define DW_LANG_C_plus_plus_20          0x002b /* DWARF6 */
 #define DW_LANG_C17                     0x002c /* DWARF6 */
@@ -1196,9 +1231,21 @@ most-likely-useful name. */
 #define DW_LANG_OpenCL_CPP              0x0037 /* DWARF6 */
 #define DW_LANG_CPP_for_OpenCL          0x0038 /* DWARF6 */
 #define DW_LANG_SYCL                    0x0039 /* DWARF6 */
+#define DW_LANG_C_plus_plus_23          0x003a /* DWARF6 */
+#define DW_LANG_Odin                    0x003b /* DWARF6 */
+#define DW_LANG_P4                      0x003c /* DWARF6 */
+#define DW_LANG_Metal                   0x003d /* DWARF6 */
+#define DW_LANG_C23                     0x003e /* DWARF6 */
+#define DW_LANG_Fortran23               0x003f /* DWARF6 */
 #define DW_LANG_Ruby                    0x0040 /* DWARF6 */
 #define DW_LANG_Move                    0x0041 /* DWARF6 */
 #define DW_LANG_Hylo                    0x0042 /* DWARF6 */
+#define DW_LANG_V                       0x0043 /* DWARF6 */
+#define DW_LANG_Algol68                 0x0044 /* DWARF6 */
+#define DW_LANG_NIM                     0x0045 /* DWARF6 */
+#define DW_LANG_Erlang                  0x0046 /* DWARF6 */
+#define DW_LANG_Elixir                  0x0047 /* DWARF6 */
+#define DW_LANG_Gleam                   0x0048 /* DWARF6 */
 
 #define DW_LANG_lo_user                 0x8000
 #define DW_LANG_Mips_Assembler          0x8001 /* MIPS   */
@@ -1212,6 +1259,62 @@ most-likely-useful name. */
 #define DW_LANG_SUN_Assembler           0x9001 /* SUN */
 
 #define DW_LANG_hi_user                 0xffff
+
+/*  The committee has, in
+    https://dwarfstd.org/languages-v6.html
+    specified that these language code, may be
+    used by compilers now, and promises these
+    will not change. */
+#define DW_LNAME_Ada               0x0001  /* DWARF6 */
+#define DW_LNAME_BLISS             0x0002  /* DWARF6 */
+#define DW_LNAME_C                 0x0003  /* DWARF6 */
+#define DW_LNAME_C_plus_plus       0x0004  /* DWARF6 */
+#define DW_LNAME_Cobol             0x0005  /* DWARF6 */
+#define DW_LNAME_Crystal           0x0006  /* DWARF6 */
+#define DW_LNAME_D                 0x0007  /* DWARF6 */
+#define DW_LNAME_Dylan             0x0008  /* DWARF6 */
+#define DW_LNAME_Fortran           0x0009  /* DWARF6 */
+#define DW_LNAME_Go                0x000a  /* DWARF6 */
+#define DW_LNAME_Haskell           0x000b  /* DWARF6 */
+#define DW_LNAME_Java              0x000c  /* DWARF6 */
+#define DW_LNAME_Julia             0x000d  /* DWARF6 */
+#define DW_LNAME_Kotlin            0x000e  /* DWARF6 */
+#define DW_LNAME_Modula2           0x000f  /* DWARF6 */
+#define DW_LNAME_Modula3           0x0010  /* DWARF6 */
+#define DW_LNAME_ObjC              0x0011  /* DWARF6 */
+#define DW_LNAME_ObjC_plus_plus    0x0012  /* DWARF6 */
+#define DW_LNAME_OCaml             0x0013  /* DWARF6 */
+#define DW_LNAME_OpenCL_C          0x0014  /* DWARF6 */
+#define DW_LNAME_Pascal            0x0015  /* DWARF6 */
+#define DW_LNAME_PLI               0x0016  /* DWARF6 */
+#define DW_LNAME_Python            0x0017  /* DWARF6 */
+#define DW_LNAME_RenderScript      0x0018  /* DWARF6 */
+#define DW_LNAME_Rust              0x0019  /* DWARF6 */
+#define DW_LNAME_Swift             0x001a  /* DWARF6 */
+#define DW_LNAME_UPC               0x001b  /* DWARF6 */
+#define DW_LNAME_Zig               0x001c  /* DWARF6 */
+#define DW_LNAME_Assembly          0x001d  /* DWARF6 */
+#define DW_LNAME_C_sharp           0x001e  /* DWARF6 */
+#define DW_LNAME_Mojo              0x001f  /* DWARF6 */
+#define DW_LNAME_GLSL              0x0020  /* DWARF6 */
+#define DW_LNAME_GLSL_ES           0x0021  /* DWARF6 */
+#define DW_LNAME_HLSL              0x0022  /* DWARF6 */
+#define DW_LNAME_OpenCL_CPP        0x0023  /* DWARF6 */
+#define DW_LNAME_CPP_for_OpenCL    0x0024  /* DWARF6 */
+#define DW_LNAME_SYCL              0x0025  /* DWARF6 */
+#define DW_LNAME_Ruby              0x0026  /* DWARF6 */
+#define DW_LNAME_Move              0x0027  /* DWARF6 */
+#define DW_LNAME_Hylo              0x0028  /* DWARF6 */
+#define DW_LNAME_HIP               0x0029  /* DWARF6 */
+#define DW_LNAME_Odin              0x002a  /* DWARF6 */
+#define DW_LNAME_P4                0x002b  /* DWARF6 */
+#define DW_LNAME_Metal             0x002c  /* DWARF6 */
+#define DW_LNAME_V                 0x002d  /* DWARF6 */
+#define DW_LNAME_Algol68           0x002e  /* DWARF6 */
+#define DW_LNAME_Nim               0x002f  /* DWARF6 */
+#define DW_LNAME_Erlang            0x0030  /* DWARF6 */
+#define DW_LNAME_Elixir            0x0031  /* DWARF6 */
+#define DW_LNAME_Gleam             0x0032  /* DWARF6 */
 
 /* Identifier case name. */
 #define DW_ID_case_sensitive            0x00
@@ -1509,84 +1612,84 @@ most-likely-useful name. */
     ** MIPS1  save/restore takes 2 instructions per 64-bit reg, and
     ** in that case, the register is considered stored after
     ** the second swc1.  */
-#define DW_FRAME_FREG0  32 /* 64-bit floating point reg 0 */
-#define DW_FRAME_FREG1  33 /* 64-bit floating point reg 1 */
-#define DW_FRAME_FREG2  34 /* 64-bit floating point reg 2 */
-#define DW_FRAME_FREG3  35 /* 64-bit floating point reg 3 */
-#define DW_FRAME_FREG4  36 /* 64-bit floating point reg 4 */
-#define DW_FRAME_FREG5  37 /* 64-bit floating point reg 5 */
-#define DW_FRAME_FREG6  38 /* 64-bit floating point reg 6 */
-#define DW_FRAME_FREG7  39 /* 64-bit floating point reg 7 */
-#define DW_FRAME_FREG8  40 /* 64-bit floating point reg 8 */
-#define DW_FRAME_FREG9  41 /* 64-bit floating point reg 9 */
-#define DW_FRAME_FREG10 42 /* 64-bit floating point reg 10 */
-#define DW_FRAME_FREG11 43 /* 64-bit floating point reg 11 */
-#define DW_FRAME_FREG12 44 /* 64-bit floating point reg 12 */
-#define DW_FRAME_FREG13 45 /* 64-bit floating point reg 13 */
-#define DW_FRAME_FREG14 46 /* 64-bit floating point reg 14 */
-#define DW_FRAME_FREG15 47 /* 64-bit floating point reg 15 */
-#define DW_FRAME_FREG16 48 /* 64-bit floating point reg 16 */
-#define DW_FRAME_FREG17 49 /* 64-bit floating point reg 17 */
-#define DW_FRAME_FREG18 50 /* 64-bit floating point reg 18 */
-#define DW_FRAME_FREG19 51 /* 64-bit floating point reg 19 */
-#define DW_FRAME_FREG20 52 /* 64-bit floating point reg 20 */
-#define DW_FRAME_FREG21 53 /* 64-bit floating point reg 21 */
-#define DW_FRAME_FREG22 54 /* 64-bit floating point reg 22 */
-#define DW_FRAME_FREG23 55 /* 64-bit floating point reg 23 */
-#define DW_FRAME_FREG24 56 /* 64-bit floating point reg 24 */
-#define DW_FRAME_FREG25 57 /* 64-bit floating point reg 25 */
-#define DW_FRAME_FREG26 58 /* 64-bit floating point reg 26 */
-#define DW_FRAME_FREG27 59 /* 64-bit floating point reg 27 */
-#define DW_FRAME_FREG28 60 /* 64-bit floating point reg 28 */
-#define DW_FRAME_FREG29 61 /* 64-bit floating point reg 29 */
-#define DW_FRAME_FREG30 62 /* 64-bit floating point reg 30 */
-#define DW_FRAME_FREG31 63 /* 64-bit floating point reg 31 */
+#define DW_FRAME_FREG0  32 /* 64-bit float reg 0 */
+#define DW_FRAME_FREG1  33 /* 64-bit float reg 1 */
+#define DW_FRAME_FREG2  34 /* 64-bit float reg 2 */
+#define DW_FRAME_FREG3  35 /* 64-bit float reg 3 */
+#define DW_FRAME_FREG4  36 /* 64-bit float reg 4 */
+#define DW_FRAME_FREG5  37 /* 64-bit float reg 5 */
+#define DW_FRAME_FREG6  38 /* 64-bit float reg 6 */
+#define DW_FRAME_FREG7  39 /* 64-bit float reg 7 */
+#define DW_FRAME_FREG8  40 /* 64-bit float reg 8 */
+#define DW_FRAME_FREG9  41 /* 64-bit float reg 9 */
+#define DW_FRAME_FREG10 42 /* 64-bit float reg 10 */
+#define DW_FRAME_FREG11 43 /* 64-bit float reg 11 */
+#define DW_FRAME_FREG12 44 /* 64-bit float reg 12 */
+#define DW_FRAME_FREG13 45 /* 64-bit float reg 13 */
+#define DW_FRAME_FREG14 46 /* 64-bit float reg 14 */
+#define DW_FRAME_FREG15 47 /* 64-bit float reg 15 */
+#define DW_FRAME_FREG16 48 /* 64-bit float reg 16 */
+#define DW_FRAME_FREG17 49 /* 64-bit float reg 17 */
+#define DW_FRAME_FREG18 50 /* 64-bit float reg 18 */
+#define DW_FRAME_FREG19 51 /* 64-bit float reg 19 */
+#define DW_FRAME_FREG20 52 /* 64-bit float reg 20 */
+#define DW_FRAME_FREG21 53 /* 64-bit float reg 21 */
+#define DW_FRAME_FREG22 54 /* 64-bit float reg 22 */
+#define DW_FRAME_FREG23 55 /* 64-bit float reg 23 */
+#define DW_FRAME_FREG24 56 /* 64-bit float reg 24 */
+#define DW_FRAME_FREG25 57 /* 64-bit float reg 25 */
+#define DW_FRAME_FREG26 58 /* 64-bit float reg 26 */
+#define DW_FRAME_FREG27 59 /* 64-bit float reg 27 */
+#define DW_FRAME_FREG28 60 /* 64-bit float reg 28 */
+#define DW_FRAME_FREG29 61 /* 64-bit float reg 29 */
+#define DW_FRAME_FREG30 62 /* 64-bit float reg 30 */
+#define DW_FRAME_FREG31 63 /* 64-bit float reg 31 */
 
-#define DW_FRAME_FREG32 64 /* 64-bit floating point reg 32 */
-#define DW_FRAME_FREG33 65 /* 64-bit floating point reg 33 */
-#define DW_FRAME_FREG34 66 /* 64-bit floating point reg 34 */
-#define DW_FRAME_FREG35 67 /* 64-bit floating point reg 35 */
-#define DW_FRAME_FREG36 68 /* 64-bit floating point reg 36 */
-#define DW_FRAME_FREG37 69 /* 64-bit floating point reg 37 */
-#define DW_FRAME_FREG38 70 /* 64-bit floating point reg 38 */
-#define DW_FRAME_FREG39 71 /* 64-bit floating point reg 39 */
-#define DW_FRAME_FREG40 72 /* 64-bit floating point reg 40 */
-#define DW_FRAME_FREG41 73 /* 64-bit floating point reg 41 */
-#define DW_FRAME_FREG42 74 /* 64-bit floating point reg 42 */
-#define DW_FRAME_FREG43 75 /* 64-bit floating point reg 43 */
-#define DW_FRAME_FREG44 76 /* 64-bit floating point reg 44 */
-#define DW_FRAME_FREG45 77 /* 64-bit floating point reg 45 */
-#define DW_FRAME_FREG46 78 /* 64-bit floating point reg 46 */
-#define DW_FRAME_FREG47 79 /* 64-bit floating point reg 47 */
-#define DW_FRAME_FREG48 80 /* 64-bit floating point reg 48 */
-#define DW_FRAME_FREG49 81 /* 64-bit floating point reg 49 */
-#define DW_FRAME_FREG50 82 /* 64-bit floating point reg 50 */
-#define DW_FRAME_FREG51 83 /* 64-bit floating point reg 51 */
-#define DW_FRAME_FREG52 84 /* 64-bit floating point reg 52 */
-#define DW_FRAME_FREG53 85 /* 64-bit floating point reg 53 */
-#define DW_FRAME_FREG54 86 /* 64-bit floating point reg 54 */
-#define DW_FRAME_FREG55 87 /* 64-bit floating point reg 55 */
-#define DW_FRAME_FREG56 88 /* 64-bit floating point reg 56 */
-#define DW_FRAME_FREG57 89 /* 64-bit floating point reg 57 */
-#define DW_FRAME_FREG58 90 /* 64-bit floating point reg 58 */
-#define DW_FRAME_FREG59 91 /* 64-bit floating point reg 59 */
-#define DW_FRAME_FREG60 92 /* 64-bit floating point reg 60 */
-#define DW_FRAME_FREG61 93 /* 64-bit floating point reg 61 */
-#define DW_FRAME_FREG62 94 /* 64-bit floating point reg 62 */
-#define DW_FRAME_FREG63 95 /* 64-bit floating point reg 63 */
-#define DW_FRAME_FREG64 96 /* 64-bit floating point reg 64 */
-#define DW_FRAME_FREG65 97 /* 64-bit floating point reg 65 */
-#define DW_FRAME_FREG66 98 /* 64-bit floating point reg 66 */
-#define DW_FRAME_FREG67 99 /* 64-bit floating point reg 67 */
-#define DW_FRAME_FREG68 100 /* 64-bit floating point reg 68 */
-#define DW_FRAME_FREG69 101 /* 64-bit floating point reg 69 */
-#define DW_FRAME_FREG70 102 /* 64-bit floating point reg 70 */
-#define DW_FRAME_FREG71 103 /* 64-bit floating point reg 71 */
-#define DW_FRAME_FREG72 104 /* 64-bit floating point reg 72 */
-#define DW_FRAME_FREG73 105 /* 64-bit floating point reg 73 */
-#define DW_FRAME_FREG74 106 /* 64-bit floating point reg 74 */
-#define DW_FRAME_FREG75 107 /* 64-bit floating point reg 75 */
-#define DW_FRAME_FREG76 108 /* 64-bit floating point reg 76 */
+#define DW_FRAME_FREG32 64 /* 64-bit float reg 32 */
+#define DW_FRAME_FREG33 65 /* 64-bit float reg 33 */
+#define DW_FRAME_FREG34 66 /* 64-bit float reg 34 */
+#define DW_FRAME_FREG35 67 /* 64-bit float reg 35 */
+#define DW_FRAME_FREG36 68 /* 64-bit float reg 36 */
+#define DW_FRAME_FREG37 69 /* 64-bit float reg 37 */
+#define DW_FRAME_FREG38 70 /* 64-bit float reg 38 */
+#define DW_FRAME_FREG39 71 /* 64-bit float reg 39 */
+#define DW_FRAME_FREG40 72 /* 64-bit float reg 40 */
+#define DW_FRAME_FREG41 73 /* 64-bit float reg 41 */
+#define DW_FRAME_FREG42 74 /* 64-bit float reg 42 */
+#define DW_FRAME_FREG43 75 /* 64-bit float reg 43 */
+#define DW_FRAME_FREG44 76 /* 64-bit float reg 44 */
+#define DW_FRAME_FREG45 77 /* 64-bit float reg 45 */
+#define DW_FRAME_FREG46 78 /* 64-bit float reg 46 */
+#define DW_FRAME_FREG47 79 /* 64-bit float reg 47 */
+#define DW_FRAME_FREG48 80 /* 64-bit float reg 48 */
+#define DW_FRAME_FREG49 81 /* 64-bit float reg 49 */
+#define DW_FRAME_FREG50 82 /* 64-bit float reg 50 */
+#define DW_FRAME_FREG51 83 /* 64-bit float reg 51 */
+#define DW_FRAME_FREG52 84 /* 64-bit float reg 52 */
+#define DW_FRAME_FREG53 85 /* 64-bit float reg 53 */
+#define DW_FRAME_FREG54 86 /* 64-bit float reg 54 */
+#define DW_FRAME_FREG55 87 /* 64-bit float reg 55 */
+#define DW_FRAME_FREG56 88 /* 64-bit float reg 56 */
+#define DW_FRAME_FREG57 89 /* 64-bit float reg 57 */
+#define DW_FRAME_FREG58 90 /* 64-bit float reg 58 */
+#define DW_FRAME_FREG59 91 /* 64-bit float reg 59 */
+#define DW_FRAME_FREG60 92 /* 64-bit float reg 60 */
+#define DW_FRAME_FREG61 93 /* 64-bit float reg 61 */
+#define DW_FRAME_FREG62 94 /* 64-bit float reg 62 */
+#define DW_FRAME_FREG63 95 /* 64-bit float reg 63 */
+#define DW_FRAME_FREG64 96 /* 64-bit float reg 64 */
+#define DW_FRAME_FREG65 97 /* 64-bit float reg 65 */
+#define DW_FRAME_FREG66 98 /* 64-bit float reg 66 */
+#define DW_FRAME_FREG67 99 /* 64-bit float reg 67 */
+#define DW_FRAME_FREG68 100 /* 64-bit float reg 68 */
+#define DW_FRAME_FREG69 101 /* 64-bit float reg 69 */
+#define DW_FRAME_FREG70 102 /* 64-bit float reg 70 */
+#define DW_FRAME_FREG71 103 /* 64-bit float reg 71 */
+#define DW_FRAME_FREG72 104 /* 64-bit float reg 72 */
+#define DW_FRAME_FREG73 105 /* 64-bit float reg 73 */
+#define DW_FRAME_FREG74 106 /* 64-bit float reg 74 */
+#define DW_FRAME_FREG75 107 /* 64-bit float reg 75 */
+#define DW_FRAME_FREG76 108 /* 64-bit float reg 76 */
 
 /*  Having DW_FRAME_HIGHEST_NORMAL_REGISTER be higher than
     is strictly needed ... is safe.

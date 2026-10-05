@@ -48,7 +48,9 @@ dwarf_form.c \
 dwarf_form_class_names.c \
 dwarf_frame.c \
 dwarf_frame.h \
+dwarf_frame_cfa_read.c \
 dwarf_frame2.c \
+dwarf_frame_iter.c \
 dwarf_gdbindex.c \
 dwarf_gdbindex.h \
 dwarf_generic_init.c \
@@ -64,13 +66,16 @@ dwarf_leb.c \
 dwarf_line.c \
 dwarf_line.h \
 dwarf_line_table_reader_common.h \
+dwarf_lname_version.c \
 dwarf_loc.c \
 dwarf_loc.h \
 dwarf_loclists.h \
 dwarf_locationop_read.c \
 dwarf_loclists.c \
+dwarf_lvn_name.c \
 dwarf_macho_loader.h \
 dwarf_machoread.c \
+dwarf_64machoread.c \
 dwarf_machoread.h \
 dwarf_macro.c \
 dwarf_macro.h \

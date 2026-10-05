@@ -69,6 +69,9 @@ add_debug_section_info(Dwarf_Debug dbg,
         If not set on some section we claim (later) that there
         is no DWARF info present. see 'foundDwarf' in this file */
     int duperr,int emptyerr,int have_dwarf,
+
+    /*  havezdebug set if actual section name
+        starts with .zdebug */
     int havezdebug,
     int *err)
 {
@@ -90,6 +93,14 @@ add_debug_section_info(Dwarf_Debug dbg,
         secdata->dss_number = obj_sec_num;
         secdata->dss_zdebug_requires_decompress =
             (Dwarf_Small)havezdebug;
+        secdata->dss_computed_mmap_offset = 0;
+        secdata->dss_computed_mmap_len = 0;
+        secdata->dss_mmap_realarea = 0;
+        secdata->dss_was_alloc = FALSE;
+        /*  Just gets current global pref */
+#ifndef TESTING
+        secdata->dss_load_preference = dwarf_set_load_preference(0);
+#endif /* TESTING*/
         /* We don't yet know about SHF_COMPRESSED */
         debug_section->ds_duperr = duperr;
         debug_section->ds_emptyerr = emptyerr;
@@ -106,7 +117,7 @@ add_debug_section_info(Dwarf_Debug dbg,
     return DW_DLV_ERROR;
 }
 
-/*  Avoid adding offest to null s2.
+/*  Avoid adding offset to null s2.
     This function avoids a compiler warning:
     error: 'strcmp' reading 1 or more bytes
     from a region of size 0
@@ -500,19 +511,24 @@ _dwarf_enter_section_in_de_debug_sections_array(Dwarf_Debug dbg,
         DW_DLE_DUPLICATE_TU_INDEX,0,
         FALSE,err);
 
-    /* GNU added this. It is not part of DWARF */
+    /*  GNU added this. It is not part of DWARF, but we will
+        consider it is so that debuglink can work.
+        Force have_dwarf TRUE github issue 297 */
     SET_UP_SECTION(dbg,scn_name,".gnu_debuglink",
         DW_GROUPNUMBER_DWO,
         &dbg->de_gnu_debuglink,
         DW_DLE_DUPLICATE_GNU_DEBUGLINK,0,
-        FALSE,err);
+        TRUE,err);
 
-    /* GNU added this. It is not part of DWARF */
+    /*  GNU added this. It is not part of DWARF, but we will
+        consider it is so that debuglink can work,
+        Force have_dwarf TRUE github issue 297 */
     SET_UP_SECTION(dbg,scn_name,".note.gnu.build-id",
         DW_GROUPNUMBER_DWO,
         &dbg->de_note_gnu_buildid,
-        DW_DLE_DUPLICATE_GNU_DEBUGLINK,0,
-        FALSE,err);
+        DW_DLE_DUPLICATE_NOTE_GNU_BUILD_ID,0,
+        TRUE,err);
+
     /* GNU added this. It is not part of DWARF */
     SET_UP_SECTION(dbg,scn_name,".debug_gnu_pubtypes.dwo",
         DW_GROUPNUMBER_DWO,

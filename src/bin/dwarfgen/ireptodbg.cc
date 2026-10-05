@@ -151,6 +151,88 @@ createskipbranchblock(
 }
 
 static void
+addLanguageVersion(Dwarf_P_Debug dbg,
+    IRepresentation & Irep,
+    Dwarf_P_Die ourdie,
+    IRDie &inDie,
+    IRDie &inParent,
+    list<IRAttr>& attrs,
+    unsigned level)
+{
+    Dwarf_Bool found_lv_name = FALSE;
+    Dwarf_Bool found_lv_version = FALSE;
+
+    (void)dbg;
+    (void)Irep;
+    (void)ourdie;
+    (void)inDie;
+    (void)inParent;
+    if (level) {
+        // No transformation of this sort is allowed.
+        return;
+    }
+    if (!cmdoptions.addlanguageversion) {
+        // No transformation of this sort is wanted.
+        return;
+    }
+    /*  Coverity Scan CID 531841.  Deleting
+        duplicate check for level > 0 */
+    list<IRAttr> revisedattrs;
+    for (list<IRAttr>::iterator it = attrs.begin();
+        it != attrs.end();
+        it++) {
+        IRAttr & attr = *it;
+        Dwarf_Half attrnum = attr.getAttrNum();
+        if (attrnum == DW_AT_language_name){
+            found_lv_name = TRUE;
+            //Nothing to do  here.
+        }
+        if (attrnum == DW_AT_language_version){
+            found_lv_version = TRUE;
+            //Nothing to  do here.
+        }
+        revisedattrs.push_back(attr);
+    }
+    if (!found_lv_name) {
+    //    add new attr.
+
+        IRAttr attr2(DW_AT_language_name,
+            DW_FORM_udata,
+            DW_FORM_udata);
+        attr2.setFormClass(DW_FORM_CLASS_CONSTANT);
+        IRFormConstant *f = new IRFormConstant(
+            DW_FORM_udata,
+            DW_FORM_udata,
+            DW_FORM_CLASS_CONSTANT,
+            IRFormConstant::UNSIGNED,
+            DW_LNAME_C,
+            0);
+        attr2.setFormData(f);
+        revisedattrs.push_back(attr2);
+    }
+    if (!found_lv_version) {
+    //    add new attr.
+        IRAttr attr2(DW_AT_language_version,
+            DW_FORM_string,
+            DW_FORM_string);
+        attr2.setFormClass(DW_FORM_CLASS_CONSTANT);
+        IRFormConstant *f = new IRFormConstant(
+            DW_FORM_udata,
+            DW_FORM_udata,
+            DW_FORM_CLASS_CONSTANT,
+            IRFormConstant::UNSIGNED,
+            199902,
+            0);
+        attr2.setFormData(f);
+        revisedattrs.push_back(attr2);
+    }
+    // Avoid memoryleak
+    //attr.dropFormData();
+    attrs = std::move(revisedattrs);
+    return;
+}
+
+static void
 addSkipBranchOps(Dwarf_P_Debug dbg,
     IRepresentation & Irep,
     Dwarf_P_Die ourdie,
@@ -540,7 +622,7 @@ addImplicitConstItem(Dwarf_P_Debug dbg,
         revisedattrs.push_back(attr);
     }
 
-    //    add two new attrs.
+    //    add new attr.
     Dwarf_Half attrnum = DW_AT_name;
     const char *attrname(testnames[alreadydone]);
     IRAttr attr2(attrnum,
@@ -626,7 +708,8 @@ HandleOneDieAndChildren(Dwarf_P_Debug dbg,
     addData16DataItem(dbg,Irep,gendie,inDie,inParent,attrs,level);
     addImplicitConstItem(dbg,Irep,gendie,inDie,inParent,attrs,level);
     addSUNfuncoffsets(dbg,Irep,gendie,inDie,inParent,attrs,level);
-    addSkipBranchOps( dbg,Irep,gendie,inDie,inParent,attrs,level);
+    addSkipBranchOps(dbg,Irep,gendie,inDie,inParent,attrs,level);
+    addLanguageVersion(dbg,Irep,gendie,inDie,inParent,attrs,level);
 
     // Now we add attributes (content), if any, to the
     // output die 'gendie'.

@@ -10,12 +10,15 @@ bin_PROGRAMS = dwarfdump
 dwarfdump_SOURCES = \
 dd_addrmap.c \
 dd_addrmap.h \
+dd_all_srcfiles.c \
+dd_all_srcfiles.h \
 dd_attr_form.h \
 dd_attr_form.c \
 dd_canonical_append.h \
 dd_canonical_append.c \
 dd_checkutil.c \
 dd_checkutil.h \
+dd_check_attr_encoding.c \
 dd_command_options.c \
 dd_command_options.h \
 dd_common.c \
@@ -23,7 +26,9 @@ dd_common.h \
 dd_compiler_info.c \
 dd_compiler_info.h \
 dd_defined_types.h \
-dd_elf_cputype.h \
+dd_elf_naming.c \
+dd_elf_naming.h \
+dd_lvn_table.c \
 dd_pe_cputype.h \
 dd_minimal.h \
 dd_regex.c \

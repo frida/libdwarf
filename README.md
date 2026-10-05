@@ -1,6 +1,6 @@
 # This is libdwarf README.md
 
-Updated 29 November 2024
+Updated 19 September 2026
 
 ## Goal
 Libdwarf has been focused for years
@@ -20,6 +20,12 @@ reasonably possible) to libdwarf for all
 changes/additions while continuing to support
 previous versions.
 
+Libdwarf reads files from disk, it does not
+read running programs or running shared objects.
+
+See REQUIREMENTS below for information
+on what libraries are needed.
+
 ## github actions
 ci runs builds on Linux, Freebsd, msys2, and MacOS
 using configure,cmake, and meson.
@@ -28,12 +34,27 @@ using configure,cmake, and meson.
 
 [![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/7275/badge)](https://bestpractices.coreinfrastructure.org/projects/7275)
 
-    Version 0.11.1 Released  1 December  2024.
-    Version 0.11.0 Released 15 August    2024.
-    Version 0.10.1 Released  1 July      2024.
-    Version 0.9.2  Released  2 April     2024.
-    Version 0.9.1  Released 27 January   2024.
-    Version 0.9.0  Released  8 December  2023.
+    Version 2.3.3  Released 22 September 2026.
+    Version 2.3.2  Released  7 July      2026.
+    Version 2.3.1  Released  4 March     2026.
+    Version 2.3.0  Released  1 February  2026.
+    Version 2.2.0  Released 10 October   2025.
+    Version 2.1.0  Released 20 July      2025.
+    Version 2.0.0  Released 20 May       2025.
+    Version 0.12.0 Released  2 April     2025.
+
+## NOTE on build failing as strdup() missing
+
+If certain gcc build options are used (for example
+-std=c99 ) gcc turns off some extensions. 
+Beginning in v2.2.0 the build systems define _GNU_SOURCE
+so that the GNU extionsions are still visible.
+In CMakeLists.txt, for example, one wants (in appropriate
+CMakeLists.txt)
+
+    target_compile_definitions(dwarf PRIVATE _GNU_SOURCE)
+    target_compile_definitions(dwarfp PRIVATE _GNU_SOURCE)
+    target_compile_definitions(dwarfdump PRIVATE _GNU_SOURCE)
 
 ## NOTE on linking against libdwarf.a
 
@@ -59,6 +80,9 @@ with zlib(libz) or libzstd
 neither those libraries nor their header files
 are required for building/using
 libdwarf/dwarfdump.
+
+No libraries other than libc are needed to build or
+use libdwarf or dwarfdump.
 
     Ubuntu:
     sudo apt install xz pkgconf zlib1g zlib1g-dev libzstd1
@@ -310,7 +334,29 @@ a build and then
 
     make distcheck
 
+# Recent Changes
+see the <strong>Recent Changes</strong> section in
+libdwarf.pdf in the release.
+Or read doc/libdwarf.dox in the
+release with a text editor and
+search for the Recent Changes section.
+
+[dwhtml]: https://www.prevanders.net/libdwarfdoc/index.html
+[dwpdf]: https://www.prevanders.net/libdwarf.pdf 
+
+Or see the latest online html version [dwhtml] for the details..
+Or see (via download) the latest pdf html version [dwpdf].
+
+Notice the table of contents at the right edge of the html page.
+
 # INCOMPATIBILITIES. Changes to interfaces
+
+### Post 0.11.0 
+
+See libdwarf.pdf or read doc/libdwarf.dox
+documentation and look for the Changes section.
+See below for links to the documents.
+Since May 2021 we follow the Semantic Versioning standard.
 
 ### Comparing libdwarf-0.11.0 to libdwarf-0.9.1
 
@@ -395,17 +441,6 @@ a consistent pattern for all such.
 Access to the DWARF5 .debug\_names section
 is now fully implemented.
 
-See the <strong>Recent Changes</strong> section in
-libdwarf.pdf (in the release).
-
-[dwhtml]: https://www.prevanders.net/libdwarfdoc/index.html
-[dwpdf]: https://www.prevanders.net/libdwarf.pdf
-
-Or see the latest online html version [dwhtml] for the details..
-Or see (via download) the latest pdf html version [dwpdf].
-
-Notice the table of contents at the right edge of the html page.
-
 ## Reading DWARF from memory
 
 If one has DWARF bytes in memory or in a
@@ -437,5 +472,7 @@ see
 and see the html [dwhtml] (www.prevanders.net/libdwarfdoc/index.html).
 
 The latest pdf is [dwpdf] (www.prevanders.net/libdwarf.pdf)
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/libdwarf.svg?exclude_unsupported=1)](https://repology.org/project/libdwarf/versions)
 
 David Anderson.

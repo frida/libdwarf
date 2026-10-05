@@ -22,6 +22,11 @@ option('sanitize',
   value : false,
   description : 'compile and link with -fsanitize options'
 )
+option('drmemory',
+  type : 'boolean',
+  value : false,
+  description : 'Build with options for DrMemory'
+)
 
 option('wall',
   type : 'boolean',
@@ -41,4 +46,19 @@ option('libdwarfspecialmalloc',
   type : 'boolean',
   value : false,
   description : 'Compile libdwarf (only) with special malloc code'
+)
+
+option('buildmmap',
+  type : 'boolean',
+  value : true,
+  description : 'Compile libdwarf with mmap support if possible'
+) 
+
+# This is crucial for testing on Windows msys2 so that
+# it works for all platforms.
+# It is required for all platforms.
+option('regressiontesting',
+  type : 'boolean',
+  value : false,
+  description : 'Compile libdwarf&dwarfdump for regression testing'
 )

@@ -1,5 +1,5 @@
 project('libdwarf', ['c','cpp'],
-  version: '0.11.2',
+  version: '2.3.4',
   default_options : [
     'buildtype=debugoptimized',
     'warning_level=3',
@@ -61,6 +61,11 @@ dev_cppflags = []
 dev_cppflags_onlylibdwarf = []
 dev_ldflags = []
 
+# -D_GNU_SOURCE is needed as otherwise
+# certain gcc options (such as -std=c99 )
+# will prevent building because strdup()
+# in string.h will be invisible.
+
 dev_cflags_try = [
   '-Wpointer-arith',
   '-Wmissing-declarations',
@@ -73,7 +78,8 @@ dev_cflags_try = [
   '-Wfloat-compare',
   '-Wsign-compare',
   '-Wno-missing-field-initializers',
-  '-fno-omit-frame-pointer'
+  '-fno-omit-frame-pointer',
+  '-D_GNU_SOURCE'
 ]
 sanitize_flags_try = [
   '-fsanitize=address',
@@ -81,6 +87,12 @@ sanitize_flags_try = [
   '-fsanitize=undefined'
 ]
 
+drmemory_flags_try = [
+  '-fno-inline',
+  '-g',
+  '-g0',
+  '-gdwarf-5'
+]
 
 if sys_windows
   if cc.get_id() != 'msvc'
@@ -100,6 +112,14 @@ foreach cf: dev_cflags_try
     endif
   endif
 endforeach
+dev_drmemory = get_option('drmemory')
+if dev_drmemory
+  foreach cf: drmemory_flags_try
+    if cc.has_argument(cf)
+      dev_cflags += cf
+    endif
+  endforeach
+endif
 
 dev_speciallibdwarfmalloc = get_option('libdwarfspecialmalloc') 
 if dev_speciallibdwarfmalloc
@@ -135,17 +155,33 @@ config_dir = [include_directories('.')]
 
 # configuration
 
+# For msys2 regressiontesting, and only that.
+dev_regressiontesting = get_option('regressiontesting')
+if dev_regressiontesting 
+  dev_cflags += ['-DDWREGRESSIONTEMP']
+endif
+
+buildmmap = get_option('buildmmap')
+mmapresult = false
+
 # sys/stat.h is for dwarfgen.
+# sys/mman.h is for mmap() and sysconf()
 header_checks = [
-  'fcntl.h',
-  'inttypes.h',
+  'unistd.h',
+  'sys/types.h',
   'malloc.h',
   'stdint.h',
+  'inttypes.h',
+  'stddef.h',
+  'fcntl.h',
   'sys/stat.h',
+  'stdafx.h',
 ]
-
 if sys_windows == false
   header_checks += 'unistd.h'
+endif
+if buildmmap == true
+  header_checks += 'sys/mman.h'
 endif
 
 config_h = configuration_data()
@@ -183,6 +219,29 @@ foreach t : [ 'uint64_t', 'uintptr_t', 'intptr_t' ]
   endif
 endforeach
 
+code = '''
+  #include <unistd.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include <sys/mman.h>
+  int main()
+  {
+      long pagesize = sysconf(_SC_PAGESIZE);
+      int fd = 4;
+      mmap(0, 100,PROT_READ|PROT_WRITE,MAP_PRIVATE,
+         fd,100);
+      munmap((void *)100,100);
+      return 0;
+  }'''
+### or use compiler.links?
+if get_option('buildmmap') == true
+  mmapresult = cc.compiles(code,name: 'mmap check')
+  if mmapresult
+    config_h.set10('HAVE_FULL_MMAP',true)
+  endif
+endif
+
+
 # Do this early so we have the base source and build directory names
 # for this and test/meson.build
 project_source_base_root = meson.current_source_dir()
@@ -202,6 +261,7 @@ subdir('src/bin/builduritable')
 subdir('src/bin/gennames')
 subdir('src/bin/tag_attr')
 subdir('src/bin/tag_tree')
+subdir('src/bin/checkDW_LANG')
 if get_option('dwarfexample') == true
   subdir('src/bin/dwarfexample')
 endif
@@ -219,14 +279,32 @@ subdir('test')
 
 #configure_file(output : 'config.h', configuration : config_h)
 
-# pkg-config file
+# pkg-config files
 
-pkg = import('pkgconfig')
-pkg.generate(libdwarf_lib,
-  filebase: 'libdwarf',
-  name: 'libdwarf',
-  description: 'DWARF debug symbols library',
-  subdirs: 'libdwarf',
+pkgconf = configuration_data()
+
+pkgconf.set('prefix', get_option('prefix'))
+pkgconf.set('exec_prefix', '${prefix}')
+pkgconf.set('libdir', join_paths('${prefix}','@0@'.format(get_option('libdir'))))
+pkgconf.set('includedir', join_paths('${prefix}','@0@'.format(get_option('includedir'))))
+pkgconf.set('pkgincludedir', join_paths('${prefix}','@0@'.format(get_option('includedir')),'/libdwarf'))
+pkgconf.set('VMAJ', v_maj)
+pkgconf.set('PACKAGE_VERSION', meson.project_version())
+pkgconf.set('PROJECT_VERSION', meson.project_version())
+if dev_decompression
+  pkgconf.set('requirements_libdwarf_pc', 'zlib')
+  pkgconf.set('requirements_libdwarf_pc', 'libzstd')
+endif
+
+pkgconf.set('requirements_libdwarf_libs', '')
+
+pkg_install_dir = '@0@/pkgconfig'.format(get_option('libdir'))
+
+configure_file(
+  input : join_paths(project_source_base_root, 'libdwarf.pc.in'),
+  output : 'libdwarf.pc',
+  configuration : pkgconf,
+  install_dir : pkg_install_dir
 )
 
 # output
@@ -256,6 +334,9 @@ summary({'zlib': (zlib_deps.found() ? 'yes' : 'no'),
          'libzstd': (libzstd_deps.found() ? 'yes' : 'no'),
         }, section: 'Referenced Libraries:')
 
+summary({'mmap available': (mmapresult ? 'yes' : 'no'),
+        }, section: 'Optional Features:')
+
 summary({'prefix': dir_prefix,
          'bindir': dir_bin,
          'libdir': dir_lib,
@@ -269,3 +350,4 @@ summary({'compilation': 'ninja',
          'installation': 'ninja install',
          'Cflags': dev_cflags,
         }, section: 'Compilation')
+

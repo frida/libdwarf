@@ -111,15 +111,25 @@ struct generic_shdr {
     Dwarf_Unsigned gh_entsize;
 
     /*  Zero unless content read in. Malloc space
-        of size gh_size,  in bytes. For dwarf
-        and strings mainly. free() this if not null*/
+        of size gh_size,  in bytes.
+        or if load type Dwarf_Alloc_Mmap
+        gh_content is a pointer to the user data.
+        free() or
+        unmap this  this if not null*/
     char *       gh_content;
+    Dwarf_Unsigned gh_compressed_len; /*0 if was not compressed */
+    /*  Actual load type */
+    enum Dwarf_Sec_Alloc_Pref gh_load_type;
+    /*  Normally TRUE, meaning do free/munmap in dwarf_finish() */
+    Dwarf_Small  gh_was_alloc;
+    char *       gh_mmap_realarea;
+    Dwarf_Unsigned gh_computed_mmaplen;
 
     /*  If a .rel or .rela section this will point
         to generic relocation records if such
         have been loaded.
-        free() this if not null. */
-    Dwarf_Unsigned          gh_relcount;
+        free() this if not null, always malloc. */
+    Dwarf_Unsigned        gh_relcount;
     struct generic_rela * gh_rels;
 
     /*  For SHT_GROUP based  grouping, which
@@ -134,7 +144,7 @@ struct generic_shdr {
 
     /*  Content of an SHT_GROUP section as an array
         of integers. [0] is the version, which
-        can only be one(1) . */
+        can only be one(1) . Free this on dwarf_finish() */
     Dwarf_Unsigned * gh_sht_group_array;
     /*  Number of elements in the gh_sht_group_array. */
     Dwarf_Unsigned   gh_sht_group_array_count;
@@ -192,6 +202,7 @@ typedef struct elf_filedata_s {
     Dwarf_Small    f_pointersize;
     int            f_ftype;
     int            f_path_source;
+    Dwarf_Debug    f_dbg;
 
     Dwarf_Unsigned f_max_secdata_offset;
     Dwarf_Unsigned f_max_progdata_offset;
@@ -207,12 +218,6 @@ typedef struct elf_filedata_s {
     struct location      f_loc_phdr;
     struct generic_phdr* f_phdr;
 
-    char *f_elf_shstrings_data; /* section name strings */
-    /* length of currentsection.  Might be zero..*/
-    Dwarf_Unsigned  f_elf_shstrings_length;
-    /* size of malloc-d space */
-    Dwarf_Unsigned  f_elf_shstrings_max;
-
     /* This is the .dynamic section */
     struct location      f_loc_dynamic;
     struct generic_dynentry * f_dynamic;
@@ -226,13 +231,24 @@ typedef struct elf_filedata_s {
     Dwarf_Unsigned f_dynsym_sect_strings_sect_index;
     Dwarf_Unsigned f_dynsym_sect_index;
 
-    /* .symtab .strtab */
-    struct location      f_loc_symtab;
-    struct generic_symentry* f_symtab;
+    /*  shstrings and strtab strings may be independent
+        or may share the same section. */
+    char *f_elf_shstrings_data; /* section name strings */
+    /* length of shstrings section.  Might be zero early on.*/
+    Dwarf_Unsigned  f_elf_shstrings_length;
+    /* size of malloc-d space */
+    Dwarf_Unsigned  f_elf_shstrings_max;
+    /*  The following so we know when strtab and shstrings
+        are in the same section, see
+        f_symtab_sect_strings_sect_index below. */
+    Dwarf_Unsigned  f_elf_shstrings_index;
     char * f_symtab_sect_strings;
     Dwarf_Unsigned f_symtab_sect_strings_max;
     Dwarf_Unsigned f_symtab_sect_strings_sect_index;
     Dwarf_Unsigned f_symtab_sect_index;
+
+    struct location      f_loc_symtab;
+    struct generic_symentry* f_symtab;
 
     /* Starts at 3. 0,1,2 used specially. */
     Dwarf_Unsigned f_sg_next_group_number;
@@ -243,19 +259,17 @@ typedef struct elf_filedata_s {
     Dwarf_Unsigned f_dwo_group_section_count;
 } dwarf_elf_object_access_internals_t;
 
-int dwarf_construct_elf_access(int fd,
-    const char *path,
-    dwarf_elf_object_access_internals_t **ep,int *errcode);
-int dwarf_destruct_elf_access(
-    dwarf_elf_object_access_internals_t *ep,int *errcode);
-int _dwarf_load_elf_header(
-    dwarf_elf_object_access_internals_t *ep,int *errcode);
+int _dwarf_load_elf_header(dwarf_elf_object_access_internals_t *ep,
+    int *errcode);
 int _dwarf_load_elf_sectheaders(
     dwarf_elf_object_access_internals_t* ep,int *errcode);
 int _dwarf_load_elf_symtab_symbols(
     dwarf_elf_object_access_internals_t *ep,int *errcode);
-int _dwarf_load_elf_symstr(
-    dwarf_elf_object_access_internals_t *ep, int *errcode);
+int _dwarf_load_elf_symstr(dwarf_elf_object_access_internals_t *ep,
+    int *errcode);
+int _dwarf_do_decompress_elf(dwarf_elf_object_access_internals_t *ep,
+    struct generic_shdr *psh,
+    int* error);
 
 /*  These two enums used for type safety in passing
     values. */
@@ -270,6 +284,15 @@ enum RelocOffsetSize {
 
 int _dwarf_load_elf_relx(dwarf_elf_object_access_internals_t *ep,
     Dwarf_Unsigned secnum,enum RelocRela,int *errcode);
+#ifndef SHF_COMPRESSED
+#define SHF_COMPRESSED (1 << 11)
+#endif /* SHF_COMPRESSED */
+#ifndef ELFCOMPRESS_ZLIB
+#define ELFCOMPRESS_ZLIB        1
+#endif /*ELFCOMPRESS_ZLIB*/
+#ifndef ELFCOMPRESS_ZSTD
+#define ELFCOMPRESS_ZSTD        2
+#endif /*ELFCOMPRESS_ZSTD*/
 
 #ifndef EI_NIDENT
 #define EI_NIDENT 16

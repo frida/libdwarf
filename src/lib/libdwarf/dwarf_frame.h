@@ -137,13 +137,13 @@ struct Dwarf_Frame_Instr_Head_s {
     Dwarf_Unsigned     fh_array_count;
 };
 
+#if 0 /* delete Dwarf_Reg_Rule_s */
 /*
-    This struct denotes the rule for a register in a row of
-    the frame table.  In other words, it is one element of
-    the table.
+    struct Dwarf_Reg_Rule_s denotes the rule for a register in
+    a row of the frame table.
+    In other words, it is one element of the table.
 */
 struct Dwarf_Reg_Rule_s {
-
     /*  Is a flag indicating whether the rule includes the offset
         field, ie whether the ru_soffset field is valid or not.
         Applies only if DW_EXPR_OFFSET or DW_EXPR_VAL_OFFSET.
@@ -178,48 +178,39 @@ struct Dwarf_Reg_Rule_s {
     /*  If ru_value_type is DW_EXPR_EXPRESSION
         or DW_EXPR_VAL_EXPRESSION this is filled in. */
     Dwarf_Block    ru_block;
-
 };
-/* Internal use only */
-typedef struct Dwarf_Regtable_Entry3_s_i {
-    Dwarf_Small     dw_offset_relevant;
-    Dwarf_Small     dw_value_type;
-    Dwarf_Unsigned  dw_regnum;
-    Dwarf_Unsigned  dw_offset;
-    Dwarf_Unsigned  dw_args_size; /* Not dealt with.  */
-    Dwarf_Block     dw_block;
-} Dwarf_Regtable_Entry3_i;
-/* Internal use only */
-typedef struct Dwarf_Regtable3_s_i {
-    Dwarf_Regtable_Entry3_i  rt3_cfa_rule;
-    Dwarf_Unsigned           rt3_reg_table_size;
-    Dwarf_Regtable_Entry3_i *rt3_rules;
-} Dwarf_Regtable3_i;
-
-typedef struct Dwarf_Frame_s *Dwarf_Frame;
-
+#endif /* obsolete */
 /*
-    This structure represents a row of the frame table.
-    Fr_loc is the pc value for this row, and Fr_reg
-    contains the rule for each column.
-
-    Entry DW_FRAME_CFA_COL of fr_reg was the traditional MIPS
-    way of setting CFA.  cfa_rule is the new one.
+    Dwarf_Frame_s contains a row of the frame table.
+    It is a wrapper of the public Frame Table
+    (so we avoid copying the array of rules
+    except in special cases, such as
+    DW_CFA_remember_state and
+    DW_CFA_restore_state) but
+    with added data for convenience.
 */
+typedef struct Dwarf_Frame_s *Dwarf_Frame;
 struct Dwarf_Frame_s {
 
-    /* Pc value corresponding to this row of the frame table. */
+    /*  Pc value corresponding to the current row of the
+        frame table recorded in fr_regtable.rt3_rules. */
     Dwarf_Addr fr_loc;
 
+    /*  Has to be a pointer, User will have created
+        much of the structure
+        for the few public API functions using this. */
+    struct Dwarf_Regtable3_s * fr_regtable;
+
     /* Rules for all the registers in this row. */
-    struct Dwarf_Reg_Rule_s fr_cfa_rule;
-
-    /*  fr_reg_count is the the number of
-        entries of the fr_reg array. */
+    /*  fr_reg_count is the the number of entries of the
+        fr_regtable->Dwarf_Regtable_Entry3.rt3_rules
+        array and the same as rt3_reg_table_size.
+        So the *true* fr_reg_count must fit in 16 bits.*/
     Dwarf_Unsigned fr_reg_count;
-    struct Dwarf_Reg_Rule_s *fr_reg;
 
-    Dwarf_Frame fr_next;
+    Dwarf_Frame fr_next; /* For DW_CFA_remember_state,
+        DW_CFA_restore_state. */
+    Dwarf_Bool  fr_owns_regtable; /* To know when/not to free */
 };
 
 /* See dwarf_frame.c for the heuristics used to set the
@@ -294,7 +285,7 @@ struct Dwarf_Cie_s {
     /*  These are extracted from the gnu eh_frame
         augmentation if the
         augmentation begins with 'z'. See Linux LSB documents.
-        Otherwize these are zero. */
+        Otherwise these are zero. */
     unsigned char    ci_gnu_personality_handler_encoding;
     unsigned char    ci_gnu_lsda_encoding;
     unsigned char    ci_gnu_fde_begin_encoding;
@@ -315,7 +306,6 @@ struct Dwarf_Cie_s {
         find address_size from the compilation-unit. */
     Dwarf_Half   ci_address_size;
     Dwarf_Half   ci_segment_size;
-
 };
 
 /*
@@ -359,7 +349,7 @@ struct Dwarf_Fde_s {
     Dwarf_Ptr      fd_gnu_eh_augmentation_bytes;
     Dwarf_Addr     fd_gnu_eh_lsda; /* If 'L' augmentation letter
         present:  is address of the
-        Language Specific Data Area (LSDA). If not 'L" is zero. */
+        Language Specific Data Area (LSDA). If not 'L' is zero. */
 
     /* The following 3 are about the Elf section the FDEs come from.*/
     Dwarf_Small   *fd_section_ptr;
@@ -374,13 +364,12 @@ struct Dwarf_Fde_s {
     Dwarf_Bool     fd_eh_table_value_set;
 
     /* The following are memoization to save recalculation. */
-    struct Dwarf_Frame_s fd_fde_table;
+    struct Dwarf_Frame_s fd_fde_frame_table;
     Dwarf_Addr     fd_fde_pc_requested;
-    Dwarf_Bool     fd_have_fde_tab;
+    Dwarf_Bool     fd_have_fde_frame_tab;
 
     /*  Set by dwarf_get_fde_for_die() */
     Dwarf_Bool     fd_fde_owns_cie;
-
 };
 
 int
@@ -405,6 +394,18 @@ _dwarf_get_fde_list_internal(Dwarf_Debug dbg,
     int use_gnu_cie_calc,  /* If non-zero,
     this is gcc eh_frame. */
     Dwarf_Error * error);
+
+struct Dwarf_Allreg_Args_s {
+    void                    *aa_user_data;
+    Dwarf_Debug              aa_dbg;
+    dwarf_iterate_fde_callback_function_type aa_callback;
+    Dwarf_Frame              aa_frameregtable; /* pointer */
+#if 0
+    struct Dwarf_Reg_Rule_s *aa_localregtab;
+    struct Dwarf_Reg_Rule_s *aa_cfa_reg;
+    Dwarf_Regtable3         *aa_regtab3;
+#endif
+};
 
 enum Dwarf_augmentation_type
 _dwarf_get_augmentation_type(Dwarf_Debug dbg,
@@ -456,23 +457,6 @@ struct cie_fde_prefix_s {
     Dwarf_Unsigned cf_section_length;
 };
 
-int
-_dwarf_exec_frame_instr(Dwarf_Bool make_instr,
-    Dwarf_Bool search_pc,
-    Dwarf_Addr search_pc_val,
-    Dwarf_Addr initial_loc,
-    Dwarf_Small * start_instr_ptr,
-    Dwarf_Small * final_instr_ptr,
-    Dwarf_Frame table,
-    Dwarf_Cie cie,
-    Dwarf_Debug dbg,
-    Dwarf_Unsigned reg_num_of_cfa,
-    Dwarf_Bool * has_more_rows,
-    Dwarf_Addr * subsequent_pc,
-    Dwarf_Frame_Instr_Head *ret_frame_instr_head,
-    Dwarf_Unsigned * returned_frame_instr_count,
-    Dwarf_Error *error);
-
 int _dwarf_read_cie_fde_prefix(Dwarf_Debug dbg,
     Dwarf_Small *frame_ptr_in,
     Dwarf_Small *section_ptr_in,
@@ -502,8 +486,66 @@ int _dwarf_create_cie_from_after_start(Dwarf_Debug dbg,
     int use_gnu_cie_calc,
     Dwarf_Cie *cie_ptr_out,
         Dwarf_Error *error);
+int
+_dwarf_exec_frame_instr(Dwarf_Bool make_instr,
+    Dwarf_Bool search_pc,
+    Dwarf_Addr search_pc_val,
+    Dwarf_Addr initial_loc,
+    Dwarf_Small * start_instr_ptr,
+    Dwarf_Small * final_instr_ptr,
+    Dwarf_Frame table,
+    Dwarf_Cie cie,
+    Dwarf_Debug dbg,
+    Dwarf_Unsigned reg_num_of_cfa,
+    Dwarf_Bool * has_more_rows,
+    Dwarf_Addr * subsequent_pc,
+    Dwarf_Frame_Instr_Head *ret_frame_instr_head,
+    Dwarf_Unsigned * returned_frame_instr_count,
+    struct Dwarf_Allreg_Args_s *iterator_data,
+    Dwarf_Error *error);
+#if 0
+void _dwarf_rule_copy(Dwarf_Debug dbg,
+    Dwarf_Frame      fde_frame_table,
+    Dwarf_Regtable3 *reg_table,
+    Dwarf_Unsigned   reg_rule_count,
+    Dwarf_Addr      *row_pc_out);
+#endif
+void _dwarf_init_reg_rules_dw3(struct Dwarf_Regtable_Entry3_s *base,
+    Dwarf_Unsigned first, Dwarf_Unsigned last,
+    Dwarf_Unsigned initial_value);
+int _dwarf_initialize_frame_table(Dwarf_Debug dbg,
+    struct Dwarf_Frame_s *fde_frame_table,
+    Dwarf_Unsigned table_real_data_size,
+    struct Dwarf_Regtable3_s *regtab_in,
+    Dwarf_Error * error);
+void _dwarf_empty_frame_table(struct Dwarf_Frame_s *fde_frame);
+int _dwarf_get_fde_info_for_a_pc_row(Dwarf_Fde fde,
+    Dwarf_Addr pc_requested,
+    Dwarf_Frame table,
+    Dwarf_Unsigned cfa_reg_col_num,
+    Dwarf_Bool * has_more_rows,
+    Dwarf_Addr * subsequent_pc,
+    struct Dwarf_Allreg_Args_s *iterator_data,
+    Dwarf_Error * error);
+
+/*  Simply assumes error is a Dwarf_Error * in its context */
+#define FDE_NULL_CHECKS_AND_SET_DBG(fde,dbg )          \
+    do {                                               \
+        if ((fde) == NULL) {                           \
+            _dwarf_error(NULL, error, DW_DLE_FDE_NULL);\
+        return DW_DLV_ERROR;                           \
+    }                                                  \
+    (dbg)= (fde)->fd_dbg;                              \
+    if (IS_INVALID_DBG((dbg))) {                         \
+        _dwarf_error_string(NULL, error, DW_DLE_FDE_DBG_NULL,\
+            "DW_DLE_FDE_DBG_NULL: An fde contains a stale "\
+            "Dwarf_Debug ");                           \
+        return DW_DLV_ERROR;                           \
+    }                                                  \
+    } while (0)
 
 int _dwarf_frame_constructor(Dwarf_Debug dbg,void * );
 void _dwarf_frame_destructor (void *);
 void _dwarf_fde_destructor (void *);
+void _dwarf_cie_destructor (void *);
 void _dwarf_frame_instr_destructor(void *);

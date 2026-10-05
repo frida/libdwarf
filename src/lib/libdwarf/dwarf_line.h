@@ -46,7 +46,7 @@ Portions Copyright (C) 2010-2012 SN Systems Ltd. All Rights Reserved.
 /*
     This structure is used to build a list of all the
     files that are used in the current compilation unit.
-    All of the fields execpt fi_next have meanings that
+    All of the fields except fi_next have meanings that
     are obvious from section 6.2.4 of the Libdwarf Doc.
     Because of DW_LNE_define_file we
     make this a list, not an array.
@@ -302,7 +302,6 @@ void _dwarf_set_line_table_regs_default_values(
 */
 struct Dwarf_Line_s {
     Dwarf_Addr li_address;  /* pc value of machine instr */
-#if 1
     struct li_inner_s {
         /* New as of DWARF4 */
         Dwarf_Unsigned li_discriminator;
@@ -348,7 +347,6 @@ struct Dwarf_Line_s {
         /* Mark a line record as being DW_LNS_set_address. */
         unsigned li_is_addr_set:1;
     } li_l_data;
-#endif /* 1 */
     Dwarf_Line_Context li_context; /* assoc Dwarf_Line_Context_s */
 
     /*  Set only on the actuals table of a two-level line table.

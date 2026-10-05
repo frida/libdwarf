@@ -24,6 +24,8 @@ libdwarf_src = [
   'dwarf_form_class_names.c',
   'dwarf_frame.c',
   'dwarf_frame2.c',
+  'dwarf_frame_iter.c',
+  'dwarf_frame_cfa_read.c',
   'dwarf_gdbindex.c',
   'dwarf_generic_init.c',
   'dwarf_global.c',
@@ -37,7 +39,10 @@ libdwarf_src = [
   'dwarf_locationop_read.c',
   'dwarf_local_malloc.c',
   'dwarf_loclists.c',
+  'dwarf_lname_version.c',
+  'dwarf_lvn_name.c',
   'dwarf_machoread.c',
+  'dwarf_64machoread.c',
   'dwarf_macro.c',
   'dwarf_macro5.c',
   'dwarf_memcpy_swap.c',
@@ -142,12 +147,12 @@ libdwarf_lib = library('dwarf', libdwarf_src,
 libdwarf = declare_dependency(
   include_directories : [ include_directories('.')],
   link_with : libdwarf_lib,
-  compile_args : [compiler_flags_public],
+  compile_args : compiler_flags_public,
   dependencies : [zlib_deps, libzstd_deps]
 )
 
 meson.override_dependency('libdwarf', libdwarf)
 
 install_headers(libdwarf_header_src,
-  install_dir : dir_pkginclude
+  install_dir : dir_pkginclude + '-' + v_maj
 )

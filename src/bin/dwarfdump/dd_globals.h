@@ -264,8 +264,7 @@ void  report_caller_error_drop_error(int dwdlv,
 
 /*  encoding_type_func used in print_die.c and
     print_lopc_hipc_attr.c  */
-typedef const char *(*encoding_type_func)
-    (unsigned,int doprintingonerr);
+typedef const char *(*encoding_type_func)(unsigned);
 int dd_get_integer_and_name(Dwarf_Debug dbg,
     Dwarf_Attribute attrib,
     Dwarf_Unsigned * uval_out,
@@ -322,9 +321,7 @@ void loc_error_check(
     const char *tagname,
     const char *attrname,
     Dwarf_Addr lopcfinal,
-    Dwarf_Addr rawlopc,
     Dwarf_Addr hipcfinal,
-    Dwarf_Addr rawhipc,
     Dwarf_Unsigned offset,
     Dwarf_Addr base_address,
     Dwarf_Bool *bError);
@@ -353,7 +350,6 @@ int dd_trace_abstract_origin_etc(
     struct esb_s *valname,
     struct esb_s *esb_extra,
     int die_indent_level,
-    int pd_dwarf_names_print_on_error,
     Dwarf_Error *err);
 int
 dd_traverse_one_die(Dwarf_Debug dbg,
@@ -378,6 +374,10 @@ dd_print_sig8_target(Dwarf_Debug dbg,
     Dwarf_Error *err);
 
 Dwarf_Bool dd_form_refers_local_info(Dwarf_Half form);
+void print_language_version_table(void);
+
+void check_attributes_encoding(Dwarf_Half attr,Dwarf_Half theform,
+    Dwarf_Unsigned value);
 
 #ifdef __cplusplus
 }

@@ -737,8 +737,7 @@ print_macro_ops(Dwarf_Debug dbg,
         esb_append_printf_u(&mtext,"0x%02x",macro_operator);
         esb_append_printf_s(&mtext," %-20s",
             (macro_operator?
-                get_MACRO_name(macro_operator,
-                    dwarf_names_print_on_error):
+                get_MACRO_name(macro_operator):
                 "end-of-macros"));
         if (glflags.gf_show_global_offsets) {
             esb_append_printf_u(&mtext," <GOFF=0x%"
@@ -755,7 +754,7 @@ print_macro_ops(Dwarf_Debug dbg,
                 esb_append_printf_u(&mtext," 0x%02x",
                     form);
                 esb_append_printf_s(&mtext," %-18s ",
-                    get_FORM_name(form,dwarf_names_print_on_error));
+                    get_FORM_name(form));
 
             }
             esb_append(&mtext,"\n   ");
@@ -1051,7 +1050,7 @@ print_macro_ops(Dwarf_Debug dbg,
                 esb_destructor(&mtext);
                 return lres;
             }
-#if 0
+#if 0 /* Possibly future use .debug_sup */
             add_macro_import_sup();
                 /* The supplementary object file is not available,
                 So we cannot check the import references
@@ -1336,15 +1335,13 @@ print_macros_5style_this_cu_inner(Dwarf_Debug dbg, Dwarf_Die cu_die,
                         "operandcount: %u\n",
                         prefix,
                         i,opcode_num,
-                        get_MACRO_name(opcode_num,
-                            dwarf_names_print_on_error),
+                        get_MACRO_name(opcode_num),
                         operand_count);
                     for (j = 0; j < operand_count; ++j) {
                         Dwarf_Small opnd = operand_array[j];
                         printf("%s    [%3u] 0x%04x %20s\n",
                             prefix,j,opnd,
-                            get_FORM_name(opnd,
-                                dwarf_names_print_on_error));
+                            get_FORM_name(opnd));
                     }
                 }
             }
@@ -1388,19 +1385,6 @@ print_macros_5style_this_cu_inner(Dwarf_Debug dbg, Dwarf_Die cu_die,
         /*  macro_unit_offset for macro_unit_length bytes
             is a real macro unit. */
     }
-#if 0
-    if (check_lines && checking_this_compiler()) {
-        DWARF_CHECK_COUNT(lines_result,1);
-        dwarf_check_lineheader(cu_die,&line_errs);
-        if (line_errs > 0) {
-            /* does glflags.check_error++; */
-            /* sets glflags.gf_record_dwarf_error = TRUE; */
-            DWARF_CHECK_ERROR_PRINT_CU();
-            DWARF_ERROR_COUNT(lines_result,line_errs);
-            DWARF_CHECK_COUNT(lines_result,(line_errs-1));
-        }
-    }
-#endif
     if (do_print_dwarf) {
         mark_macro_offset_printed(&macro_check_tree,offset);
     }

@@ -1,5 +1,5 @@
 /* Generated table, do not edit. */
-/* Generated for source version 0.11.2 */
+/* Generated for source version 2.3.4 */
 
 #ifndef DWARFDUMP_AF_TABLE_EXT_H
 #define DWARFDUMP_AF_TABLE_EXT_H
@@ -18,11 +18,16 @@ struct Three_Key_Entry_s dd_threekey_af_table_ext [] = {
 /* 0x2300 DW_AT_ALTIUM_loclist */
 /* 0x3fe4 DW_AT_APPLE_block */
 /* 0x3fe2 DW_AT_APPLE_flags */
+/* 0x2905 DW_AT_go_package_name */
+{0x2905,0x000b,0,2,0,0},
 /* 0x3fe3 DW_AT_APPLE_isa */
 /* 0x3fe5 DW_AT_APPLE_major_runtime_vers */
 /* 0x3fe7 DW_AT_APPLE_omit_frame_ptr */
+{0x3fe7,0x0005,0,2,0,0},
 /* 0x3fe1 DW_AT_APPLE_optimized */
 /* 0x3fe6 DW_AT_APPLE_runtime_class */
+/* 0x3fef DW_AT_APPLE_sdk */
+{0x3fef,0x000b,0,2,0,0},
 /* 0x2302 DW_AT_GNAT_descriptive_type */
 /* 0x2133 DW_AT_GNU_addr_base */
 {0x2133,0x000e,0,2,0,0},
@@ -82,10 +87,15 @@ struct Three_Key_Entry_s dd_threekey_af_table_ext [] = {
 /* 0x2110 DW_AT_GNU_template_name */
 /* 0x2107 DW_AT_GNU_vector */
 /* 0x2900 DW_AT_go_kind */
+{0x2900,0x0003,0,2,0,0},
 /* 0x2901 DW_AT_go_key */
+{0x2901,0x000a,0,2,0,0},
 /* 0x2902 DW_AT_go_elem */
+{0x2902,0x000a,0,2,0,0},
 /* 0x2903 DW_AT_go_embedded_field */
+{0x2903,0x0005,0,2,0,0},
 /* 0x2904 DW_AT_go_runtime_type */
+{0x2904,0x0001,0,2,0,0},
 /* 0x2019 DW_AT_HP_all_variables_modifiable */
 /* 0x2000 DW_AT_HP_block_index */
 /* 0x2018 DW_AT_HP_cold_region_high_pc */
@@ -93,6 +103,8 @@ struct Three_Key_Entry_s dd_threekey_af_table_ext [] = {
 /* 0x201a DW_AT_HP_linkage_name */
 /* 0x2015 DW_AT_HP_prof_version_id */
 /* 0x2026 DW_AT_INTEL_other_endian */
+/* 0x3e02 DW_AT_LLVM_sysroot */
+{0x3e02,0x000b,0,2,0,0},
 /* 0x2009 DW_AT_MIPS_abstract_name */
 {0x2009,0x000b,0,2,0,0},
 /* 0x200f DW_AT_MIPS_allocatable_dopetype */
