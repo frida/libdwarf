@@ -208,7 +208,7 @@ if cc.has_function('setlocale') == true
 endif
 
 foreach header : header_checks
-  if cc.has_header(header)
+  if cc.check_header(header)
     config_h.set10('HAVE_'+header.underscorify().to_upper(), true)
   endif
 endforeach
